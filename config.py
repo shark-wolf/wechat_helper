@@ -2,7 +2,7 @@ import os
 import sys
 import json
 
-# 兼容打包单文件环境与开发源码运行环境
+# 兼容单文件 EXE 解压环境与源码运行环境，确保配置持久化在程序同级
 if getattr(sys, 'frozen', False):
     BASE_DIR = os.path.dirname(sys.executable)
 else:

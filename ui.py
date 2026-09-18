@@ -40,7 +40,7 @@ class ModernButton(tk.Label):
 class WeChatAddApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("PC微信半自动辅助添加工具 (自定义模板与动态表头版)")
+        self.root.title("PC微信半自动辅助添加工具 (Win7通用与动态模板版)")
         self.root.geometry("1180x920")
         self.root.configure(bg=THEME["bg"])
 
@@ -78,7 +78,7 @@ class WeChatAddApp:
         style.configure("Vertical.TScrollbar", gripcount=0, background="#D1D5DB", troughcolor="#F3F4F6", borderwidth=0, arrowsize=12)
 
     def create_widgets(self):
-        # 1. 顶部控制栏
+        # 顶部操作卡片
         top_card = tk.Frame(self.root, bg=THEME["card_bg"], highlightbackground=THEME["border"], highlightthickness=1)
         top_card.pack(fill=tk.X, padx=15, pady=(15, 8))
         top_inner = tk.Frame(top_card, bg=THEME["card_bg"], padx=15, pady=12)
@@ -108,7 +108,7 @@ class WeChatAddApp:
         self.lbl_daily_counter = tk.Label(top_inner, text=f"本日已发: {self.daily_added_count}/{SAFETY_CONFIG['DAILY_MAX_LIMIT']}", fg=THEME["text_main"], bg=THEME["card_bg"], font=("Microsoft YaHei UI", 9, "bold"))
         self.lbl_daily_counter.pack(side=tk.RIGHT, padx=5)
 
-        # 2. 动态表格
+        # 表格卡片
         self.table_card = tk.Frame(self.root, bg=THEME["card_bg"], highlightbackground=THEME["border"], highlightthickness=1)
         self.table_card.pack(fill=tk.BOTH, expand=True, padx=15, pady=8)
         self.table_inner = tk.Frame(self.table_card, bg=THEME["card_bg"], padx=10, pady=10)
@@ -130,7 +130,7 @@ class WeChatAddApp:
         self.btn_next = ModernButton(page_inner, text="下一页 ▶", command=self.next_page, bg=THEME["accent"], hover_bg=THEME["accent_hover"], padx=8, pady=3, font=("Microsoft YaHei UI", 8, "bold"))
         self.btn_next.pack(side=tk.LEFT, padx=(10, 20))
 
-        # 3. 步骤状态
+        # 执行状态卡片
         flow_card = tk.LabelFrame(self.root, text="  操作执行实时状态  ", font=("Microsoft YaHei UI", 9, "bold"), bg=THEME["card_bg"], fg=THEME["text_main"], highlightbackground=THEME["border"], highlightthickness=1, padx=15, pady=6)
         flow_card.pack(fill=tk.X, padx=15, pady=6)
 
@@ -142,7 +142,7 @@ class WeChatAddApp:
             status_lbl.pack(side=tk.RIGHT)
             self.step_labels[key] = status_lbl
 
-        # 4. 控制台日志
+        # 控制台卡片
         log_card = tk.LabelFrame(self.root, text="  安全运行控制台日志 (双击行复制 / 右键菜单)  ", font=("Microsoft YaHei UI", 9, "bold"), bg=THEME["card_bg"], fg=THEME["text_main"], highlightbackground=THEME["border"], highlightthickness=1, padx=10, pady=6, height=130)
         log_card.pack_propagate(False)
         log_card.pack(fill=tk.X, padx=15, pady=(6, 15))
@@ -157,7 +157,7 @@ class WeChatAddApp:
         self.log_text.bind("<Button-3>", self._show_log_context_menu)
 
     def build_treeview_structure(self):
-        """动态生成包含自定义表头的 Treeview 结构"""
+        """动态生成 Treeview 表头列结构"""
         for child in self.table_inner.winfo_children():
             child.destroy()
 
@@ -191,7 +191,7 @@ class WeChatAddApp:
         self.tree.bind("<MouseWheel>", lambda e: self.root.after(50, self.update_button_positions))
 
     def open_template_config_dialog(self):
-        """自定义 Excel 模板表头与功能列映射"""
+        """打开自定义 Excel 表头及列映射弹窗"""
         dialog = tk.Toplevel(self.root)
         dialog.title("自定义 Excel 模板与字段映射")
         dlg_w, dlg_h = 560, 480
@@ -293,6 +293,7 @@ class WeChatAddApp:
         ModernButton(btn_row, text="取消", command=dialog.destroy, bg="#E5E7EB", hover_bg="#D1D5DB", fg="#374151").pack(side=tk.RIGHT, padx=5)
 
     def export_excel_template(self):
+        """根据当前配置表头生成 Excel 模板"""
         headers = self.template_cfg.get("headers", ["手机号", "客户姓名", "申请打招呼语", "微信备注"])
         path = filedialog.asksaveasfilename(title="保存自定义模板文件", defaultextension=".xlsx", initialfile="微信添加好友导入模板.xlsx", filetypes=[("Excel", "*.xlsx")])
         if not path:

@@ -6,7 +6,8 @@ from ui import WeChatAddApp
 
 def set_app_user_model_id():
     try:
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_USER_MODEL_ID)
+        if hasattr(ctypes.windll.shell32, "SetCurrentProcessExplicitAppUserModelID"):
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_USER_MODEL_ID)
     except Exception:
         pass
 

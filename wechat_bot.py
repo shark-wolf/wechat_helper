@@ -9,7 +9,7 @@ from config import SAFETY_CONFIG, GREETING_POOL, load_coords, save_coord
 from win_core import force_foreground, human_delay, set_clipboard_text, paste_text
 
 def post_click(hwnd: int, rel_x: int, rel_y: int):
-    """后台消息投递点击（不夺取物理鼠标光标）"""
+    """后台消息投递点击（不抢占物理鼠标）"""
     lparam = win32api.MAKELONG(rel_x, rel_y)
     win32gui.PostMessage(hwnd, win32con.WM_MOUSEMOVE, 0, lparam)
     time.sleep(0.08)
@@ -34,7 +34,7 @@ def capture_click_relative(hwnd: int, timeout_sec: int = 20):
     return None
 
 def check_verify_dialog_exists() -> int:
-    """检测右侧『申请添加朋友』弹窗是否已打开"""
+    """检测右侧『申请添加朋友』弹窗是否已经成功弹出"""
     target_h = 0
     def enum_cb(h, _):
         nonlocal target_h
@@ -75,9 +75,7 @@ class WeChatBot:
     def execute_add_pipeline(self, phone: str, remark_name: str = "", custom_greeting: str = "") -> str:
         coords = load_coords()
         try:
-            # ----------------------------------------------------
-            # 步骤 1: 唤醒置顶微信
-            # ----------------------------------------------------
+            # 步骤 1: 唤醒并置顶微信
             self.set_step("CONNECT", "进行中...", "#D97706")
             hwnd = self.find_wechat_hwnd()
             if not hwnd:
@@ -94,9 +92,7 @@ class WeChatBot:
             wechat_main = app.window(handle=hwnd)
             self.set_step("CONNECT", "✓ 完成", "#07C160")
 
-            # ----------------------------------------------------
-            # 步骤 2: 搜索框填入手机号
-            # ----------------------------------------------------
+            # 步骤 2: 搜索框输入号码
             self.set_step("SEARCH", "静默搜号中...", "#D97706")
             self.log(f"激活搜索框并填入号码: {phone}")
 
@@ -126,9 +122,7 @@ class WeChatBot:
             keyboard.send_keys('{ENTER}')
             self.set_step("SEARCH", "✓ 完成", "#07C160")
 
-            # ----------------------------------------------------
-            # 步骤 3: 状态闭环双探（有/无视频号自动适配）
-            # ----------------------------------------------------
+            # 步骤 3: 状态闭环双探
             self.set_step("CHECK_CARD", "检测卡片中...", "#D97706")
             self.log("等待『添加朋友』独立卡片弹窗...")
             human_delay(2.2, 3.0)
@@ -202,9 +196,7 @@ class WeChatBot:
             human_delay(1.0, 1.5)
             self.set_step("CHECK_CARD", "✓ 已点击添加", "#07C160")
 
-            # ----------------------------------------------------
             # 步骤 4: 右侧『申请添加朋友』弹窗
-            # ----------------------------------------------------
             self.set_step("SEND_VERIFY", "填写验证中...", "#D97706")
             self.log("等待右侧『申请添加朋友』弹窗...")
 
@@ -242,7 +234,7 @@ class WeChatBot:
                 except Exception:
                     pass
 
-                # 动态填充招呼语
+                # 动态填充打招呼语
                 greeting = custom_greeting.strip() if custom_greeting and custom_greeting != "-" else random.choice(GREETING_POOL)
                 self.log(f"填写验证招呼语: {greeting}")
                 if all_edits:
@@ -285,7 +277,7 @@ class WeChatBot:
             time.sleep(0.3)
             keyboard.send_keys('{ENTER}')
 
-            # 关闭残留
+            # 关闭左侧面板
             time.sleep(0.8)
             keyboard.send_keys('{ESC}')
 
