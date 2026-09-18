@@ -9,7 +9,7 @@ from config import SAFETY_CONFIG, GREETING_POOL, load_coords, save_coord
 from win_core import force_foreground, human_delay, set_clipboard_text, paste_text
 
 def post_click(hwnd: int, rel_x: int, rel_y: int):
-    """通过后台 Windows 消息精准投递点击（不抢占物理鼠标）"""
+    """后台消息投递点击（不夺取物理鼠标光标）"""
     lparam = win32api.MAKELONG(rel_x, rel_y)
     win32gui.PostMessage(hwnd, win32con.WM_MOUSEMOVE, 0, lparam)
     time.sleep(0.08)
@@ -19,7 +19,7 @@ def post_click(hwnd: int, rel_x: int, rel_y: int):
     time.sleep(0.15)
 
 def capture_click_relative(hwnd: int, timeout_sec: int = 20):
-    """监听用户单次鼠标物理点击，计算相对目标窗口左上角 (0,0) 的相对坐标"""
+    """捕获物理鼠标点击并转为目标窗口相对坐标"""
     start_time = time.time()
     while win32api.GetAsyncKeyState(win32con.VK_LBUTTON) < 0:
         time.sleep(0.05)
@@ -34,7 +34,7 @@ def capture_click_relative(hwnd: int, timeout_sec: int = 20):
     return None
 
 def check_verify_dialog_exists() -> int:
-    """检测右侧『申请添加朋友』弹窗是否已经成功弹出"""
+    """检测右侧『申请添加朋友』弹窗是否已打开"""
     target_h = 0
     def enum_cb(h, _):
         nonlocal target_h
@@ -72,11 +72,11 @@ class WeChatBot:
         win32gui.EnumWindows(enum_cb, None)
         return target_hwnd
 
-    def execute_add_pipeline(self, phone: str, remark_name: str = "") -> str:
+    def execute_add_pipeline(self, phone: str, remark_name: str = "", custom_greeting: str = "") -> str:
         coords = load_coords()
         try:
             # ----------------------------------------------------
-            # 步骤 1: 唤醒并置顶微信
+            # 步骤 1: 唤醒置顶微信
             # ----------------------------------------------------
             self.set_step("CONNECT", "进行中...", "#D97706")
             hwnd = self.find_wechat_hwnd()
@@ -95,7 +95,7 @@ class WeChatBot:
             self.set_step("CONNECT", "✓ 完成", "#07C160")
 
             # ----------------------------------------------------
-            # 步骤 2: 搜索框输入号码 -> 停顿0.5s -> 下键 -> 回车
+            # 步骤 2: 搜索框填入手机号
             # ----------------------------------------------------
             self.set_step("SEARCH", "静默搜号中...", "#D97706")
             self.log(f"激活搜索框并填入号码: {phone}")
@@ -127,7 +127,7 @@ class WeChatBot:
             self.set_step("SEARCH", "✓ 完成", "#07C160")
 
             # ----------------------------------------------------
-            # 步骤 3: 状态闭环智能双探（完美支持标定）
+            # 步骤 3: 状态闭环双探（有/无视频号自动适配）
             # ----------------------------------------------------
             self.set_step("CHECK_CARD", "检测卡片中...", "#D97706")
             self.log("等待『添加朋友』独立卡片弹窗...")
@@ -171,7 +171,6 @@ class WeChatBot:
                 keyboard.send_keys('{ESC}')
                 return "已是好友"
 
-            # 如果当前处于定向标定模式，等待人工点击捕获
             if self.target_calibration in ["STEP3_NO_CHANNELS", "STEP3_HAS_CHANNELS"]:
                 calib_name = "无视频号" if self.target_calibration == "STEP3_NO_CHANNELS" else "有视频号"
                 self.log(f"🎯【定向标定】：请用鼠标在弹窗上点击【添加到通讯录】({calib_name})...")
@@ -184,7 +183,6 @@ class WeChatBot:
                     self.log(f"⚠️ 标定超时，使用默认坐标: {coords[self.target_calibration]}")
                     post_click(add_friend_win.handle, coords[self.target_calibration][0], coords[self.target_calibration][1])
             else:
-                # 【全自动状态闭环探测】：先试探无视频号坐标，未响应则试探有视频号坐标
                 no_x, no_y = coords["STEP3_NO_CHANNELS"]
                 has_x, has_y = coords["STEP3_HAS_CHANNELS"]
 
@@ -192,7 +190,6 @@ class WeChatBot:
                 post_click(add_friend_win.handle, no_x, no_y)
                 time.sleep(0.8)
 
-                # 检查确认框是否成功弹出
                 if check_verify_dialog_exists():
                     self.log("✅ 确认弹窗已出现 -> 确定为【无视频号】名片！")
                 else:
@@ -245,8 +242,8 @@ class WeChatBot:
                 except Exception:
                     pass
 
-                # 1. 招呼语
-                greeting = random.choice(GREETING_POOL)
+                # 动态填充招呼语
+                greeting = custom_greeting.strip() if custom_greeting and custom_greeting != "-" else random.choice(GREETING_POOL)
                 self.log(f"填写验证招呼语: {greeting}")
                 if all_edits:
                     try:
@@ -262,7 +259,7 @@ class WeChatBot:
                 paste_text()
                 human_delay(0.5, 0.8)
 
-                # 2. 备注
+                # 动态填充备注名
                 final_remark = remark_name.strip() if remark_name and remark_name != "-" else ""
                 if final_remark:
                     self.log(f"设置备注名称: {final_remark}")
@@ -280,7 +277,7 @@ class WeChatBot:
                     paste_text()
                     human_delay(0.5, 0.8)
 
-                # 3. 提交确定按钮
+                # 点击确定
                 btn_x, btn_y = coords["STEP4_CONFIRM_BTN"]
                 self.log(f"后台点击确定按钮 -> 相对坐标 ({btn_x}, {btn_y})")
                 post_click(verify_win.handle, btn_x, btn_y)
@@ -288,7 +285,7 @@ class WeChatBot:
             time.sleep(0.3)
             keyboard.send_keys('{ENTER}')
 
-            # 4. 关闭残留面板
+            # 关闭残留
             time.sleep(0.8)
             keyboard.send_keys('{ESC}')
 

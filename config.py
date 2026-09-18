@@ -2,15 +2,15 @@ import os
 import sys
 import json
 
-# 判断当前是打包后的独立 EXE 环境还是普通的 py 运行环境
+# 兼容打包单文件环境与开发源码运行环境
 if getattr(sys, 'frozen', False):
-    # 打包为单文件 EXE 时，定位到实际运行的 exe 所在文件夹
     BASE_DIR = os.path.dirname(sys.executable)
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 ICON_PATH = os.path.join(BASE_DIR, "app_icon.ico")
 COORDS_FILE = os.path.join(BASE_DIR, "coords_config.json")
+TEMPLATE_CONFIG_FILE = os.path.join(BASE_DIR, "template_config.json")
 APP_USER_MODEL_ID = "company.wechat.automation.pro.4.0"
 
 SAFETY_CONFIG = {
@@ -25,7 +25,7 @@ SAFETY_CONFIG = {
 STEPS = [
     ("CONNECT", "1. 唤醒并置顶 PC 微信主窗口"),
     ("SEARCH", "2. 静默定位搜索框，键入手机号+下键+回车"),
-    ("CHECK_CARD", "3. 状态闭环智能识别视频号并点击『添加到通讯录』"),
+    ("CHECK_CARD", "3. 状态闭环双探视频号并点击『添加到通讯录』"),
     ("SEND_VERIFY", "4. 填写验证申请语及备注并确认发送")
 ]
 
@@ -38,7 +38,33 @@ GREETING_POOL = [
     "您好，同行交流，方便通过一下吗"
 ]
 
-# 实测精确基准坐标
+# 默认表头与动态字段映射配置
+DEFAULT_TEMPLATE_CONFIG = {
+    "headers": ["手机号", "客户姓名", "申请打招呼语", "微信备注"],
+    "phone_col": "手机号",
+    "greeting_col": "申请打招呼语",
+    "remark_col": "微信备注"
+}
+
+def load_template_config() -> dict:
+    cfg = DEFAULT_TEMPLATE_CONFIG.copy()
+    if os.path.exists(TEMPLATE_CONFIG_FILE):
+        try:
+            with open(TEMPLATE_CONFIG_FILE, "r", encoding="utf-8") as f:
+                saved = json.load(f)
+                cfg.update(saved)
+        except Exception:
+            pass
+    return cfg
+
+def save_template_config(cfg: dict):
+    try:
+        with open(TEMPLATE_CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+# 实测默认基准坐标
 DEFAULT_COORDS = {
     "STEP3_NO_CHANNELS": [276, 414],     # 步骤3-无视频号按钮[cite: 1]
     "STEP3_HAS_CHANNELS": [284, 497],    # 步骤3-有视频号按钮
