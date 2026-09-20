@@ -14,9 +14,13 @@ TEMPLATE_CONFIG_FILE = os.path.join(BASE_DIR, "template_config.json")
 APP_USER_MODEL_ID = "company.wechat.automation.pro.4.0"
 
 SAFETY_CONFIG = {
-    "DAILY_MAX_LIMIT": 15,
+    # 调大本地计数上限（例如 500 或 99999），解除本地拦截
+    "DAILY_MAX_LIMIT": 100,
+    # 极大延长单次请求间隔：模拟真人日常操作习惯，拉长到 90 ~ 180 秒（1.5~3分钟）
+    # 频率越低，被后端模型标记为机器人的概率越小
     "MIN_COOLDOWN_SEC": 25,
     "MAX_COOLDOWN_SEC": 45,
+    # 动作间随机拟人停顿
     "ACTION_PAUSE_MIN": 1.2,
     "ACTION_PAUSE_MAX": 2.0,
     "SEARCH_DEBOUNCE": 0.5
