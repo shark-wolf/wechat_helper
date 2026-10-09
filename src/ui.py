@@ -7,20 +7,23 @@ from tkinter import ttk, messagebox, filedialog
 import pandas as pd
 import pyperclip
 
+import config
 from config import (
-    THEME, STEPS, PAGE_SIZE, SAFETY_CONFIG, ICON_PATH,
-    load_coords, load_template_config, load_success_phones, record_success_phone
+    THEME, STEPS, ICON_PATH,
+    load_coords, load_template_config, load_success_phones, record_success_phone,
+    load_safety_config, save_safety_config
 )
 from wechat_bot import WeChatBot
 from ui_components import ModernButton, parse_placeholders
 from ui_dialog_template import TemplateConfigDialog
 from ui_dialog_calibration import CalibrationDialog
+from ui_dialog_safety import SafetyConfigDialog
 
 class WeChatAddApp:
     def __init__(self, root):
         self.root = root
         self.root.title("PC微信半自动辅助添加工具")
-        self.root.geometry("1900x1000")
+        self.root.geometry("1900x1300")
         self.root.configure(bg=THEME["bg"])
 
         # 绑定窗口关闭事件 (WM_DELETE_WINDOW)
@@ -47,6 +50,11 @@ class WeChatAddApp:
         self.all_selected = False
 
         self.template_cfg = load_template_config()
+        self.safety_cfg = load_safety_config()
+        # 从配置动态初始化 page_size
+        self.page_size = int(self.safety_cfg.get("PAGE_SIZE", 15))
+        config.SAFETY_CONFIG.update(self.safety_cfg)
+
         self.bot = WeChatBot(logger_callback=self.log, step_callback=self.set_step_status)
 
         self.setup_styles()
@@ -91,7 +99,10 @@ class WeChatAddApp:
         self.btn_export_template.pack(side=tk.LEFT, padx=(0, 8))
 
         self.btn_cfg_template = ModernButton(top_inner, text="⚙ 模板映射配置", command=self.open_template_config_dialog, bg="#6366F1", hover_bg="#4F46E5")
-        self.btn_cfg_template.pack(side=tk.LEFT, padx=(0, 15))
+        self.btn_cfg_template.pack(side=tk.LEFT, padx=(0, 8))
+
+        self.btn_cfg_safety = ModernButton(top_inner, text="🛡️ 安全参数设置", command=self.open_safety_config_dialog, bg="#059669", hover_bg="#047857")
+        self.btn_cfg_safety.pack(side=tk.LEFT, padx=(0, 15))
 
         self.btn_export = ModernButton(top_inner, text="💾 导出结果", command=self.export_excel_file, bg="#4B5563", hover_bg="#374151")
         self.btn_export.pack(side=tk.LEFT, padx=(0, 15))
@@ -105,7 +116,7 @@ class WeChatAddApp:
         self.lbl_selected_summary = tk.Label(top_inner, text="已勾选: 0 项", fg="#2563EB", bg=THEME["card_bg"], font=("Microsoft YaHei UI", 9, "bold"))
         self.lbl_selected_summary.pack(side=tk.LEFT, padx=10)
 
-        self.lbl_daily_counter = tk.Label(top_inner, text=f"本日已发: {self.daily_added_count}/{SAFETY_CONFIG['DAILY_MAX_LIMIT']}", fg=THEME["text_main"], bg=THEME["card_bg"], font=("Microsoft YaHei UI", 9, "bold"))
+        self.lbl_daily_counter = tk.Label(top_inner, text=f"本日已发: {self.daily_added_count}/{self.safety_cfg['DAILY_MAX_LIMIT']}", fg=THEME["text_main"], bg=THEME["card_bg"], font=("Microsoft YaHei UI", 9, "bold"))
         self.lbl_daily_counter.pack(side=tk.RIGHT, padx=5)
 
         # 表格卡片
@@ -116,6 +127,7 @@ class WeChatAddApp:
 
         self.build_treeview_structure()
 
+        # 分页控制器卡片
         page_card = tk.Frame(self.table_card, bg="#FAFAFA", highlightbackground=THEME["border"], highlightthickness=1)
         page_card.pack(fill=tk.X, padx=10, pady=(0, 10))
         page_inner = tk.Frame(page_card, bg="#FAFAFA", padx=10, pady=6)
@@ -130,6 +142,14 @@ class WeChatAddApp:
         self.btn_next = ModernButton(page_inner, text="下一页 ▶", command=self.next_page, bg=THEME["accent"], hover_bg=THEME["accent_hover"], padx=8, pady=3, font=("Microsoft YaHei UI", 8, "bold"))
         self.btn_next.pack(side=tk.LEFT, padx=(10, 20))
 
+        # UI 每页条数快捷选择器
+        tk.Label(page_inner, text="每页显示:", fg=THEME["text_sub"], bg="#FAFAFA", font=("Microsoft YaHei UI", 8)).pack(side=tk.LEFT, padx=(10, 2))
+        self.cbo_ui_page_size = ttk.Combobox(page_inner, values=["10", "15", "20", "30", "50", "100"], width=6, state="readonly")
+        self.cbo_ui_page_size.set(str(self.page_size))
+        self.cbo_ui_page_size.pack(side=tk.LEFT, padx=2)
+        self.cbo_ui_page_size.bind("<<ComboboxSelected>>", self.on_page_size_changed)
+        tk.Label(page_inner, text="条", fg=THEME["text_sub"], bg="#FAFAFA", font=("Microsoft YaHei UI", 8)).pack(side=tk.LEFT)
+
         # 执行状态卡片
         flow_card = tk.LabelFrame(self.root, text="  操作执行实时状态  ", font=("Microsoft YaHei UI", 9, "bold"), bg=THEME["card_bg"], fg=THEME["text_main"], highlightbackground=THEME["border"], highlightthickness=1, padx=15, pady=6)
         flow_card.pack(fill=tk.X, padx=15, pady=6)
@@ -142,12 +162,12 @@ class WeChatAddApp:
             status_lbl.pack(side=tk.RIGHT)
             self.step_labels[key] = status_lbl
 
-        # 控制台卡片
-        log_card = tk.LabelFrame(self.root, text="  安全运行控制台日志 (双击行复制 / 右键菜单)  ", font=("Microsoft YaHei UI", 9, "bold"), bg=THEME["card_bg"], fg=THEME["text_main"], highlightbackground=THEME["border"], highlightthickness=1, padx=10, pady=6, height=130)
+        # 控制台卡片：增加高度至 240，提升日志可视行数
+        log_card = tk.LabelFrame(self.root, text="  安全运行控制台日志 (双击行复制 / 右键菜单)  ", font=("Microsoft YaHei UI", 9, "bold"), bg=THEME["card_bg"], fg=THEME["text_main"], highlightbackground=THEME["border"], highlightthickness=1, padx=10, pady=6, height=240)
         log_card.pack_propagate(False)
         log_card.pack(fill=tk.X, padx=15, pady=(6, 15))
 
-        self.log_text = tk.Text(log_card, height=5, wrap=tk.WORD, state=tk.DISABLED, bg="#111827", fg="#F3F4F6", font=("Consolas", 9), relief=tk.FLAT, padx=8, pady=6)
+        self.log_text = tk.Text(log_card, wrap=tk.WORD, state=tk.DISABLED, bg="#111827", fg="#F3F4F6", font=("Consolas", 9), relief=tk.FLAT, padx=8, pady=6)
         log_scroll = ttk.Scrollbar(log_card, orient=tk.VERTICAL, command=self.log_text.yview)
         self.log_text.configure(yscrollcommand=log_scroll.set)
         self.log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -155,6 +175,17 @@ class WeChatAddApp:
 
         self.log_text.bind("<Double-1>", self._on_log_double_click)
         self.log_text.bind("<Button-3>", self._show_log_context_menu)
+
+    def on_page_size_changed(self, event=None):
+        """当用户在 UI 下拉框切换每页显示条数时触发"""
+        val = int(self.cbo_ui_page_size.get())
+        if val != self.page_size:
+            self.page_size = val
+            self.safety_cfg["PAGE_SIZE"] = val
+            save_safety_config(self.safety_cfg)
+            self.current_page = 1
+            self.refresh_treeview()
+            self.log(f"📑 表格每页条数已调整为: {val} 条/页")
 
     def build_treeview_structure(self):
         for child in self.table_inner.winfo_children():
@@ -198,6 +229,20 @@ class WeChatAddApp:
 
         TemplateConfigDialog(self.root, on_save_callback=on_saved, log_callback=self.log)
 
+    def open_safety_config_dialog(self):
+        def on_saved(new_cfg):
+            self.safety_cfg = new_cfg
+            config.SAFETY_CONFIG.update(new_cfg)
+            self.lbl_daily_counter.config(text=f"本日已发: {self.daily_added_count}/{self.safety_cfg['DAILY_MAX_LIMIT']}")
+
+            if "PAGE_SIZE" in new_cfg and new_cfg["PAGE_SIZE"] != self.page_size:
+                self.page_size = new_cfg["PAGE_SIZE"]
+                self.cbo_ui_page_size.set(str(self.page_size))
+                self.current_page = 1
+                self.refresh_treeview()
+
+        SafetyConfigDialog(self.root, on_save_callback=on_saved, log_callback=self.log)
+
     def open_calibration_dialog(self):
         CalibrationDialog(self.root, bot_instance=self.bot, log_callback=self.log)
 
@@ -215,7 +260,6 @@ class WeChatAddApp:
             if "状态" not in df.columns:
                 df["状态"] = "未添加"
 
-            # 自动比对已成功发送过的历史手机号
             success_phones = load_success_phones()
             history_matched_count = 0
             for idx_row, row in df.iterrows():
@@ -290,7 +334,6 @@ class WeChatAddApp:
                 return
             df_copy = self.df.copy()
 
-        # 动态拼接 年月日时分秒 格式时间戳
         time_str = time.strftime("%Y%m%d_%H%M%S")
         default_filename = f"微信添加执行结果_{time_str}.xlsx"
 
@@ -358,7 +401,7 @@ class WeChatAddApp:
     def update_page_info(self):
         with self.df_lock:
             total_records = len(self.df) if self.df is not None else 0
-        self.total_pages = max(1, (total_records + PAGE_SIZE - 1) // PAGE_SIZE)
+        self.total_pages = max(1, (total_records + self.page_size - 1) // self.page_size)
         self.current_page = min(self.current_page, self.total_pages)
         self.lbl_page_info.config(text=f"第 {self.current_page} / {self.total_pages} 页 (共 {total_records} 条记录)")
         self.btn_prev.set_state("disabled" if self.current_page <= 1 else "normal")
@@ -394,8 +437,8 @@ class WeChatAddApp:
         with self.df_lock:
             if self.df is None or self.df.empty:
                 return
-            start = (self.current_page - 1) * PAGE_SIZE
-            end = min(start + PAGE_SIZE, len(self.df))
+            start = (self.current_page - 1) * self.page_size
+            end = min(start + self.page_size, len(self.df))
             headers = self.template_cfg.get("headers", ["手机号", "客户姓名", "公司名称"])
             page_slice = self.df.iloc[start:end].copy()
 
@@ -428,7 +471,6 @@ class WeChatAddApp:
                 btn.place_forget()
 
     def start_single_task(self, idx: int):
-        """单条手动触发任务（即使已成功也可以手动执行）"""
         if self.is_batch_running:
             messagebox.showwarning("冲突", "批量任务正在执行中！")
             return
@@ -460,7 +502,6 @@ class WeChatAddApp:
                 st = str(self.df.at[i, "状态"]).strip()
                 phone = str(self.df.at[i, phone_col]).strip()
 
-                # 检查是否成功发送过（包括历史记录）或已是好友
                 if "成功" in st or "已是好友" in st or phone in success_phones:
                     skipped_success_count += 1
                     if phone in success_phones and "成功" not in st and "已是好友" not in st:
@@ -488,7 +529,10 @@ class WeChatAddApp:
         phone_col = self.template_cfg.get("phone_col", "手机号")
         self.log(f"🛡️ 启动批量调度，总计: {len(target_indices)} 个任务")
         for i, idx in enumerate(target_indices):
-            if self.cancel_requested or self.daily_added_count >= SAFETY_CONFIG["DAILY_MAX_LIMIT"]:
+            daily_limit = self.safety_cfg.get("DAILY_MAX_LIMIT", 100)
+            if self.cancel_requested or self.daily_added_count >= daily_limit:
+                if self.daily_added_count >= daily_limit:
+                    self.log(f"🛑 已达到单日安全上限 {daily_limit} 人，停止批量操作。")
                 break
 
             with self.df_lock:
@@ -500,7 +544,9 @@ class WeChatAddApp:
                 self.log("🚨 命中风控熔断，紧急挂起全部任务！")
                 break
             if i < len(target_indices) - 1 and not self.cancel_requested:
-                cooldown = random.randint(SAFETY_CONFIG["MIN_COOLDOWN_SEC"], SAFETY_CONFIG["MAX_COOLDOWN_SEC"])
+                c_min = self.safety_cfg.get("MIN_COOLDOWN_SEC", 25)
+                c_max = self.safety_cfg.get("MAX_COOLDOWN_SEC", 45)
+                cooldown = random.randint(min(c_min, c_max), max(c_min, c_max))
                 for s in range(cooldown, 0, -1):
                     if self.cancel_requested:
                         break
@@ -543,7 +589,7 @@ class WeChatAddApp:
             self.daily_added_count += 1
             record_success_phone(phone)
             self.log(f"📝 手机号 {phone} 已加入已发送申请成功库。")
-            self.root.after(0, lambda: self.lbl_daily_counter.config(text=f"本日已发: {self.daily_added_count}/{SAFETY_CONFIG['DAILY_MAX_LIMIT']}"))
+            self.root.after(0, lambda: self.lbl_daily_counter.config(text=f"本日已发: {self.daily_added_count}/{self.safety_cfg['DAILY_MAX_LIMIT']}"))
 
         self.root.after(0, lambda: self._update_row_view(idx, result))
         return result

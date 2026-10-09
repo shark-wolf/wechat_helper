@@ -12,20 +12,44 @@ ICON_PATH = os.path.join(BASE_DIR, "app_icon.ico")
 COORDS_FILE = os.path.join(BASE_DIR, "coords_config.json")
 TEMPLATE_CONFIG_FILE = os.path.join(BASE_DIR, "template_config.json")
 SUCCESS_PHONES_FILE = os.path.join(BASE_DIR, "success_phones.json")
+SAFETY_CONFIG_FILE = os.path.join(BASE_DIR, "safety_config.json")
 APP_USER_MODEL_ID = "company.wechat.automation.pro.4.0"
 
-SAFETY_CONFIG = {
+DEFAULT_SAFETY_CONFIG = {
     # 单日添加上限
     "DAILY_MAX_LIMIT": 100,
     # 单次操作后的拟人随机冷却间隔（单位：秒）
     "MIN_COOLDOWN_SEC": 25,
     "MAX_COOLDOWN_SEC": 45,
-    # 动作间随机拟人停顿
+    # 动作间随机拟人停顿（单位：秒）
     "ACTION_PAUSE_MIN": 1.2,
     "ACTION_PAUSE_MAX": 2.0,
     # 搜索框输入后的防抖防卡顿时间（单位：秒）
-    "SEARCH_DEBOUNCE": 1.0
+    "SEARCH_DEBOUNCE": 1.0,
+    # 表格每页条数
+    "PAGE_SIZE": 15
 }
+
+def load_safety_config() -> dict:
+    cfg = DEFAULT_SAFETY_CONFIG.copy()
+    if os.path.exists(SAFETY_CONFIG_FILE):
+        try:
+            with open(SAFETY_CONFIG_FILE, "r", encoding="utf-8") as f:
+                saved = json.load(f)
+                cfg.update(saved)
+        except Exception:
+            pass
+    return cfg
+
+def save_safety_config(cfg: dict):
+    try:
+        with open(SAFETY_CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+# 全局运行态缓存
+SAFETY_CONFIG = load_safety_config()
 
 STEPS = [
     ("CONNECT", "1. 唤醒并置顶 PC 微信主窗口"),
@@ -43,14 +67,13 @@ GREETING_POOL = [
     "您好，同行交流，方便通过一下吗"
 ]
 
-# 默认表头与动态字段映射配置
 DEFAULT_TEMPLATE_CONFIG = {
     "headers": ["手机号", "姓名", "小区", "楼栋", "单元", "房号"],
     "phone_col": "手机号",
-    "greeting_type": "manual",  # "manual" 手动/模板输入, "default" 系统默认
-    "greeting_template": "你好，简单沟通一下！",  # 可用 ${公司名称}
-    "remark_template": "${小区}${楼栋}${单元}${房号}-${姓名}(${手机号})",  # 占位符组合
-    "dedup_cols": ["手机号", "姓名", "小区", "楼栋", "单元", "房号"]  # 去重数据组合列
+    "greeting_type": "manual",
+    "greeting_template": "你好，简单沟通一下！",
+    "remark_template": "${小区}${楼栋}${单元}${房号}-${姓名}(${手机号})",
+    "dedup_cols": ["手机号", "姓名", "小区", "楼栋", "单元", "房号"]
 }
 
 def load_template_config() -> dict:
@@ -71,13 +94,12 @@ def save_template_config(cfg: dict):
     except Exception:
         pass
 
-# 实测默认基准坐标
 DEFAULT_COORDS = {
-    "STEP3_NO_CHANNELS": [276, 414],     # 步骤3-无视频号按钮
-    "STEP3_HAS_CHANNELS": [284, 497],    # 步骤3-有视频号按钮
-    "STEP4_GREETING_INPUT": [190, 160],  # 步骤4-招呼语输入框
-    "STEP4_REMARK_INPUT": [190, 280],    # 步骤4-备注输入框
-    "STEP4_CONFIRM_BTN": [145, 705]      # 步骤4-确定按钮
+    "STEP3_NO_CHANNELS": [276, 414],
+    "STEP3_HAS_CHANNELS": [284, 497],
+    "STEP4_GREETING_INPUT": [190, 160],
+    "STEP4_REMARK_INPUT": [190, 280],
+    "STEP4_CONFIRM_BTN": [145, 705]
 }
 
 def load_coords() -> dict:
@@ -100,9 +122,7 @@ def save_coord(key: str, rel_x: int, rel_y: int):
     except Exception:
         pass
 
-# 成功发送记录存储与加载
 def load_success_phones() -> set:
-    """加载已经成功发送过申请的手机号集合"""
     if os.path.exists(SUCCESS_PHONES_FILE):
         try:
             with open(SUCCESS_PHONES_FILE, "r", encoding="utf-8") as f:
@@ -113,7 +133,6 @@ def load_success_phones() -> set:
     return set()
 
 def record_success_phone(phone: str):
-    """持久化记录成功发送申请的手机号"""
     if not phone:
         return
     phone = str(phone).strip()
@@ -141,4 +160,4 @@ THEME = {
     "disabled_fg": "#9CA3AF"
 }
 
-PAGE_SIZE = 15
+PAGE_SIZE = SAFETY_CONFIG.get("PAGE_SIZE", 15)
