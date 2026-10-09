@@ -4,6 +4,16 @@ from config import APP_USER_MODEL_ID, SAFETY_CONFIG
 from win_core import is_admin
 from ui import WeChatAddApp
 
+def set_dpi_awareness():
+    """开启系统高 DPI 意识，防止屏幕缩放导致的坐标及 UI 布局错位"""
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)  # Process_Per_Monitor_DPI_Aware
+    except Exception:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
 def set_app_user_model_id():
     try:
         if hasattr(ctypes.windll.shell32, "SetCurrentProcessExplicitAppUserModelID"):
@@ -12,6 +22,7 @@ def set_app_user_model_id():
         pass
 
 def bootstrap():
+    set_dpi_awareness()
     set_app_user_model_id()
     root = tk.Tk()
     app = WeChatAddApp(root)

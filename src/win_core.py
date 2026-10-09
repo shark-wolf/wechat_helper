@@ -42,7 +42,7 @@ def force_foreground(hwnd: int):
         curr_thread = win32api.GetCurrentThreadId()
         target_thread, _ = win32process.GetWindowThreadProcessId(hwnd)
 
-        # 兼容 Win7 的跨线程焦点附加与热键激活技术
+        # 兼容跨线程焦点附加与热键激活技术
         attached = False
         if curr_thread != target_thread:
             try:

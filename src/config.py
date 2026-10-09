@@ -14,16 +14,16 @@ TEMPLATE_CONFIG_FILE = os.path.join(BASE_DIR, "template_config.json")
 APP_USER_MODEL_ID = "company.wechat.automation.pro.4.0"
 
 SAFETY_CONFIG = {
-    # 调大本地计数上限（例如 500 或 99999），解除本地拦截
+    # 单日添加上限
     "DAILY_MAX_LIMIT": 100,
-    # 极大延长单次请求间隔：模拟真人日常操作习惯，拉长到 90 ~ 180 秒（1.5~3分钟）
-    # 频率越低，被后端模型标记为机器人的概率越小
+    # 单次操作后的拟人随机冷却间隔（单位：秒）
     "MIN_COOLDOWN_SEC": 25,
     "MAX_COOLDOWN_SEC": 45,
     # 动作间随机拟人停顿
     "ACTION_PAUSE_MIN": 1.2,
     "ACTION_PAUSE_MAX": 2.0,
-    "SEARCH_DEBOUNCE": 0.5
+    # 搜索框输入后的防抖防卡顿时间（单位：秒）
+    "SEARCH_DEBOUNCE": 1.0
 }
 
 STEPS = [
@@ -44,10 +44,12 @@ GREETING_POOL = [
 
 # 默认表头与动态字段映射配置
 DEFAULT_TEMPLATE_CONFIG = {
-    "headers": ["手机号", "客户姓名", "申请打招呼语", "微信备注"],
+    "headers": ["手机号", "姓名", "小区","楼栋", "单元", "房号"],
     "phone_col": "手机号",
-    "greeting_col": "申请打招呼语",
-    "remark_col": "微信备注"
+    "greeting_type": "manual",  # "manual" 手动/模板输入, "default" 系统默认
+    "greeting_template": "你好，简单沟通一下！",  # 可用 ${公司名称}
+    "remark_template": "${小区}${楼栋}${单元}${房号}-${姓名}(${手机号})",  # 占位符组合
+    "dedup_cols": ["手机号", "姓名", "小区","楼栋", "单元", "房号"]  # 去重数据组合列
 }
 
 def load_template_config() -> dict:
@@ -70,7 +72,7 @@ def save_template_config(cfg: dict):
 
 # 实测默认基准坐标
 DEFAULT_COORDS = {
-    "STEP3_NO_CHANNELS": [276, 414],     # 步骤3-无视频号按钮[cite: 1]
+    "STEP3_NO_CHANNELS": [276, 414],     # 步骤3-无视频号按钮
     "STEP3_HAS_CHANNELS": [284, 497],    # 步骤3-有视频号按钮
     "STEP4_GREETING_INPUT": [190, 160],  # 步骤4-招呼语输入框
     "STEP4_REMARK_INPUT": [190, 280],    # 步骤4-备注输入框

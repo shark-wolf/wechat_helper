@@ -117,10 +117,11 @@ class WeChatBot:
             set_clipboard_text(phone)
             paste_text()
 
-            time.sleep(SAFETY_CONFIG["SEARCH_DEBOUNCE"])
+            # 延长防抖等待，确保网络查找结果在慢速网络下充分加载
+            time.sleep(max(1.0, SAFETY_CONFIG["SEARCH_DEBOUNCE"]))
             self.log("发送【向下键】选定网络查找项...")
             keyboard.send_keys('{DOWN}')
-            time.sleep(0.25)
+            time.sleep(0.3)
 
             self.log("发送【回车键】触发网络查找...")
             keyboard.send_keys('{ENTER}')
@@ -252,10 +253,8 @@ class WeChatBot:
                 final_remark = remark_name.strip() if remark_name and remark_name != "-" else ""
                 if final_remark:
                     self.log(f"准备设置备注名称: {final_remark}")
-                    # 按 TAB 键将焦点从招呼语输入框切换至备注框
                     keyboard.send_keys('{TAB}')
                     time.sleep(0.25)
-                    # 清空微信默认自动填入的对方微信昵称
                     keyboard.send_keys('^a{BACKSPACE}')
                     time.sleep(0.15)
                     set_clipboard_text(final_remark)
