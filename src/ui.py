@@ -9,7 +9,7 @@ import pyperclip
 
 import config
 from config import (
-    THEME, STEPS, ICON_PATH,
+    THEME, STEPS, ICON_PATH, GREETING_POOL,
     load_coords, load_template_config, load_success_phones, record_success_phone,
     load_safety_config, save_safety_config
 )
@@ -162,7 +162,7 @@ class WeChatAddApp:
             status_lbl.pack(side=tk.RIGHT)
             self.step_labels[key] = status_lbl
 
-        # 控制台卡片：增加高度至 240，提升日志可视行数
+        # 控制台卡片
         log_card = tk.LabelFrame(self.root, text="  安全运行控制台日志 (双击行复制 / 右键菜单)  ", font=("Microsoft YaHei UI", 9, "bold"), bg=THEME["card_bg"], fg=THEME["text_main"], highlightbackground=THEME["border"], highlightthickness=1, padx=10, pady=6, height=240)
         log_card.pack_propagate(False)
         log_card.pack(fill=tk.X, padx=15, pady=(6, 15))
@@ -177,7 +177,6 @@ class WeChatAddApp:
         self.log_text.bind("<Button-3>", self._show_log_context_menu)
 
     def on_page_size_changed(self, event=None):
-        """当用户在 UI 下拉框切换每页显示条数时触发"""
         val = int(self.cbo_ui_page_size.get())
         if val != self.page_size:
             self.page_size = val
@@ -191,7 +190,7 @@ class WeChatAddApp:
         for child in self.table_inner.winfo_children():
             child.destroy()
 
-        headers = self.template_cfg.get("headers", ["手机号", "客户姓名", "公司名称"])
+        headers = self.template_cfg.get("headers", ["手机号", "姓名", "小区", "楼栋", "单元", "房号"])
         self.tree_columns = ["勾选", "序号"] + headers + ["状态", "操作"]
 
         self.tree = ttk.Treeview(self.table_inner, columns=self.tree_columns, show="headings", height=14)
@@ -234,12 +233,6 @@ class WeChatAddApp:
             self.safety_cfg = new_cfg
             config.SAFETY_CONFIG.update(new_cfg)
             self.lbl_daily_counter.config(text=f"本日已发: {self.daily_added_count}/{self.safety_cfg['DAILY_MAX_LIMIT']}")
-
-            if "PAGE_SIZE" in new_cfg and new_cfg["PAGE_SIZE"] != self.page_size:
-                self.page_size = new_cfg["PAGE_SIZE"]
-                self.cbo_ui_page_size.set(str(self.page_size))
-                self.current_page = 1
-                self.refresh_treeview()
 
         SafetyConfigDialog(self.root, on_save_callback=on_saved, log_callback=self.log)
 
@@ -295,7 +288,7 @@ class WeChatAddApp:
             self.log(f"❌ 导入失败: {e}")
 
     def export_excel_template(self):
-        headers = self.template_cfg.get("headers", ["手机号", "客户姓名", "公司名称"])
+        headers = self.template_cfg.get("headers", ["手机号", "姓名", "小区", "楼栋", "单元", "房号"])
         time_str = time.strftime("%Y%m%d_%H%M%S")
         default_tpl_name = f"微信添加好友导入模板_{time_str}.xlsx"
 
@@ -439,7 +432,7 @@ class WeChatAddApp:
                 return
             start = (self.current_page - 1) * self.page_size
             end = min(start + self.page_size, len(self.df))
-            headers = self.template_cfg.get("headers", ["手机号", "客户姓名", "公司名称"])
+            headers = self.template_cfg.get("headers", ["手机号", "姓名", "小区", "楼栋", "单元", "房号"])
             page_slice = self.df.iloc[start:end].copy()
 
         for idx, row in page_slice.iterrows():
@@ -568,9 +561,14 @@ class WeChatAddApp:
             row_dict = {col: self.df.at[idx, col] for col in self.df.columns}
             phone = str(self.df.at[idx, phone_col]).strip()
 
-            greeting = ""
+            # 根据配置动态决定招呼语（手动模板 vs 用户编辑的随机语池）
             if greeting_type == "manual":
                 greeting = parse_placeholders(greeting_tpl, row_dict)
+            else:
+                pool = self.template_cfg.get("greetings", GREETING_POOL)
+                if not pool:
+                    pool = GREETING_POOL
+                greeting = random.choice(pool)
 
             remark = parse_placeholders(remark_tpl, row_dict)
 

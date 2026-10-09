@@ -16,17 +16,12 @@ SAFETY_CONFIG_FILE = os.path.join(BASE_DIR, "safety_config.json")
 APP_USER_MODEL_ID = "company.wechat.automation.pro.4.0"
 
 DEFAULT_SAFETY_CONFIG = {
-    # 单日添加上限
     "DAILY_MAX_LIMIT": 100,
-    # 单次操作后的拟人随机冷却间隔（单位：秒）
     "MIN_COOLDOWN_SEC": 25,
     "MAX_COOLDOWN_SEC": 45,
-    # 动作间随机拟人停顿（单位：秒）
     "ACTION_PAUSE_MIN": 1.2,
     "ACTION_PAUSE_MAX": 2.0,
-    # 搜索框输入后的防抖防卡顿时间（单位：秒）
     "SEARCH_DEBOUNCE": 1.0,
-    # 表格每页条数
     "PAGE_SIZE": 15
 }
 
@@ -48,7 +43,6 @@ def save_safety_config(cfg: dict):
     except Exception:
         pass
 
-# 全局运行态缓存
 SAFETY_CONFIG = load_safety_config()
 
 STEPS = [
@@ -58,6 +52,7 @@ STEPS = [
     ("SEND_VERIFY", "4. 填写验证申请语及备注并确认发送")
 ]
 
+# 默认基础语池
 GREETING_POOL = [
     "你好，我是通过电话联系你的",
     "您好，之前存了您的电话，加个微信",
@@ -67,11 +62,13 @@ GREETING_POOL = [
     "您好，同行交流，方便通过一下吗"
 ]
 
+# 默认表头与动态字段映射配置
 DEFAULT_TEMPLATE_CONFIG = {
     "headers": ["手机号", "姓名", "小区", "楼栋", "单元", "房号"],
     "phone_col": "手机号",
-    "greeting_type": "manual",
+    "greeting_type": "manual",  # "manual" 手动/模板输入, "default" 系统随机语池
     "greeting_template": "你好，简单沟通一下！",
+    "greetings": GREETING_POOL.copy(),  # 语池列表
     "remark_template": "${小区}${楼栋}${单元}${房号}-${姓名}(${手机号})",
     "dedup_cols": ["手机号", "姓名", "小区", "楼栋", "单元", "房号"]
 }
@@ -83,6 +80,9 @@ def load_template_config() -> dict:
             with open(TEMPLATE_CONFIG_FILE, "r", encoding="utf-8") as f:
                 saved = json.load(f)
                 cfg.update(saved)
+                # 兼容历史没有 greetings 字段的情况
+                if "greetings" not in cfg or not cfg["greetings"]:
+                    cfg["greetings"] = GREETING_POOL.copy()
         except Exception:
             pass
     return cfg
@@ -93,6 +93,12 @@ def save_template_config(cfg: dict):
             json.dump(cfg, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
+
+def get_greeting_pool() -> list:
+    """获取当前配置中生效的打招呼随机语池"""
+    cfg = load_template_config()
+    pool = cfg.get("greetings", [])
+    return pool if pool else GREETING_POOL
 
 DEFAULT_COORDS = {
     "STEP3_NO_CHANNELS": [276, 414],
