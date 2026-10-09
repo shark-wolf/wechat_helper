@@ -11,6 +11,7 @@ else:
 ICON_PATH = os.path.join(BASE_DIR, "app_icon.ico")
 COORDS_FILE = os.path.join(BASE_DIR, "coords_config.json")
 TEMPLATE_CONFIG_FILE = os.path.join(BASE_DIR, "template_config.json")
+SUCCESS_PHONES_FILE = os.path.join(BASE_DIR, "success_phones.json")
 APP_USER_MODEL_ID = "company.wechat.automation.pro.4.0"
 
 SAFETY_CONFIG = {
@@ -44,12 +45,12 @@ GREETING_POOL = [
 
 # 默认表头与动态字段映射配置
 DEFAULT_TEMPLATE_CONFIG = {
-    "headers": ["手机号", "姓名", "小区","楼栋", "单元", "房号"],
+    "headers": ["手机号", "姓名", "小区", "楼栋", "单元", "房号"],
     "phone_col": "手机号",
     "greeting_type": "manual",  # "manual" 手动/模板输入, "default" 系统默认
     "greeting_template": "你好，简单沟通一下！",  # 可用 ${公司名称}
     "remark_template": "${小区}${楼栋}${单元}${房号}-${姓名}(${手机号})",  # 占位符组合
-    "dedup_cols": ["手机号", "姓名", "小区","楼栋", "单元", "房号"]  # 去重数据组合列
+    "dedup_cols": ["手机号", "姓名", "小区", "楼栋", "单元", "房号"]  # 去重数据组合列
 }
 
 def load_template_config() -> dict:
@@ -96,6 +97,31 @@ def save_coord(key: str, rel_x: int, rel_y: int):
     try:
         with open(COORDS_FILE, "w", encoding="utf-8") as f:
             json.dump(coords, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+# 成功发送记录存储与加载
+def load_success_phones() -> set:
+    """加载已经成功发送过申请的手机号集合"""
+    if os.path.exists(SUCCESS_PHONES_FILE):
+        try:
+            with open(SUCCESS_PHONES_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return set(str(p).strip() for p in data if str(p).strip())
+        except Exception:
+            pass
+    return set()
+
+def record_success_phone(phone: str):
+    """持久化记录成功发送申请的手机号"""
+    if not phone:
+        return
+    phone = str(phone).strip()
+    phones = load_success_phones()
+    phones.add(phone)
+    try:
+        with open(SUCCESS_PHONES_FILE, "w", encoding="utf-8") as f:
+            json.dump(sorted(list(phones)), f, ensure_ascii=False, indent=2)
     except Exception:
         pass
 

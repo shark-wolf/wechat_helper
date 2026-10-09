@@ -152,9 +152,9 @@ class WeChatBot:
                         break
 
             if not add_friend_win:
-                self.log("未检测到添加朋友窗体。")
-                self.set_step("CHECK_CARD", "❌ 弹窗未出", "#DC2626")
-                return "用户不存在/弹窗未出"
+                self.log("未检测到添加朋友窗体，判定用户不存在。")
+                self.set_step("CHECK_CARD", "❌ 用户不存在", "#DC2626")
+                return "用户不存在"
 
             force_foreground(add_friend_win.handle)
             time.sleep(0.4)
@@ -222,9 +222,9 @@ class WeChatBot:
                 time.sleep(0.3)
 
             if not verify_win:
-                self.log("未检测到申请添加朋友确认框。")
-                self.set_step("SEND_VERIFY", "❌ 确认框未出", "#DC2626")
-                return "申请弹窗未弹出"
+                self.log("未检测到申请添加朋友确认框，判定用户不存在。")
+                self.set_step("SEND_VERIFY", "❌ 弹窗未弹出", "#DC2626")
+                return "用户不存在"
 
             force_foreground(verify_win.handle)
             time.sleep(0.4)

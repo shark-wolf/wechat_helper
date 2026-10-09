@@ -9,7 +9,7 @@ import pyperclip
 
 from config import (
     THEME, STEPS, PAGE_SIZE, SAFETY_CONFIG, ICON_PATH,
-    load_coords, load_template_config
+    load_coords, load_template_config, load_success_phones, record_success_phone
 )
 from wechat_bot import WeChatBot
 from ui_components import ModernButton, parse_placeholders
@@ -58,7 +58,6 @@ class WeChatAddApp:
             if messagebox.askyesno("确认退出", "批量添加任务正在运行中，确定要中断任务并退出程序吗？"):
                 self.cancel_requested = True
                 self.log("🛑 正在中断后台任务并安全退出...")
-                # 留出 300ms 缓冲让线程循环接收到 cancel_requested 标识
                 self.root.after(300, self._force_exit)
         else:
             self._force_exit()
@@ -216,6 +215,15 @@ class WeChatAddApp:
             if "状态" not in df.columns:
                 df["状态"] = "未添加"
 
+            # 自动比对已成功发送过的历史手机号
+            success_phones = load_success_phones()
+            history_matched_count = 0
+            for idx_row, row in df.iterrows():
+                p = str(row[phone_col]).strip()
+                if p in success_phones and str(row["状态"]).strip() in ["未添加", "nan", ""]:
+                    df.at[idx_row, "状态"] = "已发送申请(历史)"
+                    history_matched_count += 1
+
             dedup_setting = self.template_cfg.get("dedup_cols", ["手机号"])
             valid_dedup_cols = [c for c in dedup_setting if c in df.columns]
 
@@ -237,13 +245,22 @@ class WeChatAddApp:
             self.refresh_treeview()
 
             dedup_msg = f"，依 [{'+'.join(valid_dedup_cols)}] 组合自动过滤重复记录 {removed_count} 条，剩余有效数据 {after_count} 条。" if removed_count > 0 else "。"
-            self.log(f"✅ 成功载入数据: {os.path.basename(path)}{dedup_msg}")
+            hist_msg = f"（其中已包含历史成功发送手机号 {history_matched_count} 条）" if history_matched_count > 0 else ""
+            self.log(f"✅ 成功载入数据: {os.path.basename(path)}{dedup_msg}{hist_msg}")
         except Exception as e:
             self.log(f"❌ 导入失败: {e}")
 
     def export_excel_template(self):
         headers = self.template_cfg.get("headers", ["手机号", "客户姓名", "公司名称"])
-        path = filedialog.asksaveasfilename(title="保存自定义模板文件", defaultextension=".xlsx", initialfile="微信添加好友导入模板.xlsx", filetypes=[("Excel", "*.xlsx")])
+        time_str = time.strftime("%Y%m%d_%H%M%S")
+        default_tpl_name = f"微信添加好友导入模板_{time_str}.xlsx"
+
+        path = filedialog.asksaveasfilename(
+            title="保存自定义模板文件",
+            defaultextension=".xlsx",
+            initialfile=default_tpl_name,
+            filetypes=[("Excel", "*.xlsx")]
+        )
         if not path:
             return
 
@@ -273,7 +290,16 @@ class WeChatAddApp:
                 return
             df_copy = self.df.copy()
 
-        path = filedialog.asksaveasfilename(title="导出执行结果", defaultextension=".xlsx", initialfile="微信添加执行结果.xlsx", filetypes=[("Excel", "*.xlsx")])
+        # 动态拼接 年月日时分秒 格式时间戳
+        time_str = time.strftime("%Y%m%d_%H%M%S")
+        default_filename = f"微信添加执行结果_{time_str}.xlsx"
+
+        path = filedialog.asksaveasfilename(
+            title="导出执行结果",
+            defaultextension=".xlsx",
+            initialfile=default_filename,
+            filetypes=[("Excel", "*.xlsx")]
+        )
         if path:
             try:
                 df_copy.to_excel(path, index=False)
@@ -402,6 +428,7 @@ class WeChatAddApp:
                 btn.place_forget()
 
     def start_single_task(self, idx: int):
+        """单条手动触发任务（即使已成功也可以手动执行）"""
         if self.is_batch_running:
             messagebox.showwarning("冲突", "批量任务正在执行中！")
             return
@@ -423,13 +450,31 @@ class WeChatAddApp:
                 messagebox.showwarning("提示", "请勾选需要执行的行！")
                 return
 
-            pending = [
-                i for i in sorted(list(self.selected_indices))
-                if not ("成功" in str(self.df.at[i, "状态"]) or "已是好友" in str(self.df.at[i, "状态"]))
-            ]
+            phone_col = self.template_cfg.get("phone_col", "手机号")
+            success_phones = load_success_phones()
+
+            pending = []
+            skipped_success_count = 0
+
+            for i in sorted(list(self.selected_indices)):
+                st = str(self.df.at[i, "状态"]).strip()
+                phone = str(self.df.at[i, phone_col]).strip()
+
+                # 检查是否成功发送过（包括历史记录）或已是好友
+                if "成功" in st or "已是好友" in st or phone in success_phones:
+                    skipped_success_count += 1
+                    if phone in success_phones and "成功" not in st and "已是好友" not in st:
+                        self.df.at[i, "状态"] = "已成功发送(已跳过)"
+                    continue
+
+                pending.append(i)
+
+        if skipped_success_count > 0:
+            self.log(f"ℹ️ 批量模式自动跳过已成功发送过的号码: {skipped_success_count} 个（可点击单行按钮手动补发）")
+            self.refresh_treeview(keep_page=True)
 
         if not pending:
-            messagebox.showinfo("提示", "勾选的所有条目均已添加成功或已是好友！")
+            messagebox.showinfo("提示", "勾选的条目均已成功发送申请或已是好友，批量已全部跳过！\n如需重新发送，可点击对应行的【单个添加】手动发送。")
             return
 
         self.log(f"📋 执行模式：执行【勾选指定项】，待处理: {len(pending)} 个")
@@ -496,6 +541,8 @@ class WeChatAddApp:
 
         if "成功" in result:
             self.daily_added_count += 1
+            record_success_phone(phone)
+            self.log(f"📝 手机号 {phone} 已加入已发送申请成功库。")
             self.root.after(0, lambda: self.lbl_daily_counter.config(text=f"本日已发: {self.daily_added_count}/{SAFETY_CONFIG['DAILY_MAX_LIMIT']}"))
 
         self.root.after(0, lambda: self._update_row_view(idx, result))
@@ -508,7 +555,7 @@ class WeChatAddApp:
             self.tree.item(idx, values=vals)
         btn = self.row_buttons.get(idx)
         if btn:
-            is_done = "成功" in result or "已是好友" in result
+            is_done = "成功" in result or "已是好友" in result or "已发送" in result
             btn.set_state("normal", text="✓ 完成" if is_done else "➕ 重试")
         self.update_button_positions()
 
