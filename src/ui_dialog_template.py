@@ -72,7 +72,7 @@ class TemplateConfigDialog(tk.Toplevel):
         greet_mode_var = tk.StringVar(value=self.cfg.get("greeting_type", "manual"))
 
         # 模式1: 手动/模板输入
-        rb_greet_manual = tk.Radiobutton(greet_sec, text="1- 手动输入/占位符招呼语（空值则使用系统默认）", variable=greet_mode_var, value="manual", bg=THEME["card_bg"], font=("Microsoft YaHei UI", 9))
+        rb_greet_manual = tk.Radiobutton(greet_sec, text="手动输入/占位符招呼语（空值则使用系统默认）", variable=greet_mode_var, value="manual", bg=THEME["card_bg"], font=("Microsoft YaHei UI", 9))
         rb_greet_manual.pack(anchor="w", padx=10, pady=2)
 
         greet_input_f = tk.Frame(greet_sec, bg=THEME["card_bg"])
@@ -82,7 +82,7 @@ class TemplateConfigDialog(tk.Toplevel):
         ent_greeting.insert(0, self.cfg.get("greeting_template", "你好，简单沟通一下！"))
 
         # 模式2: 随机语池（可编辑与列出）
-        rb_greet_def = tk.Radiobutton(greet_sec, text="2- 直接选择系统默认随机语池（下方可自定义编辑语料池，每行一条）：", variable=greet_mode_var, value="default", bg=THEME["card_bg"], font=("Microsoft YaHei UI", 9))
+        rb_greet_def = tk.Radiobutton(greet_sec, text="直接选择系统默认随机语池（下方可自定义编辑语料池，每行一条）：", variable=greet_mode_var, value="default", bg=THEME["card_bg"], font=("Microsoft YaHei UI", 9))
         rb_greet_def.pack(anchor="w", padx=10, pady=(6, 2))
 
         # 语池编辑器容器
