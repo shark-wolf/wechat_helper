@@ -48,13 +48,16 @@ class WeChatAddApp:
         self.selected_indices = set()
         self.all_selected = False
 
+        # 用于精确计算各列文本真实像素宽度的字体对象
         self.measure_font = tkfont.Font(family="Microsoft YaHei UI", size=9)
         self.header_font = tkfont.Font(family="Microsoft YaHei UI", size=9, weight="bold")
 
+        # 列宽自适应控制字典
         self.col_base_widths = {}
         self.col_cur_widths = {}
         self.last_table_w = 0
 
+        # 首列扩宽至 88px，确保 "[  ] 全选" 100% 完整展示
         self.col_w_chk = 88
         self.col_w_seq = 60
         self.col_w_op = 105
@@ -287,12 +290,38 @@ class WeChatAddApp:
         CalibrationDialog(self.root, bot_instance=self.bot, log_callback=self.log)
 
     def import_excel_file(self):
-        path = filedialog.askopenfilename(title="选择 Excel 文件", filetypes=[("Excel", "*.xlsx *.xls"), ("All", "*.*")])
+        """导入 Excel 文件（完整支持 .xlsx 与 .xls 格式）"""
+        path = filedialog.askopenfilename(
+            title="选择 Excel 文件",
+            filetypes=[
+                ("Excel 文件 (*.xlsx;*.xls)", "*.xlsx *.xls"),
+                ("Excel 工作簿 (*.xlsx)", "*.xlsx"),
+                ("Excel 97-2003 工作簿 (*.xls)", "*.xls"),
+                ("所有文件 (*.*)", "*.*")
+            ]
+        )
         if not path:
             return
+
+        raw_df = None
+        ext = os.path.splitext(path)[1].lower()
+
         try:
-            raw_df = pd.read_excel(path, header=None, dtype=str)
-            if raw_df.empty:
+            if ext == ".xls":
+                # 针对 .xls 文件优先使用 xlrd 引擎解析
+                try:
+                    raw_df = pd.read_excel(path, header=None, dtype=str, engine="xlrd")
+                except ImportError:
+                    self.log("⚠️ 检测到当前未安装 xlrd 库，尝试使用默认解析引擎...")
+                    raw_df = pd.read_excel(path, header=None, dtype=str)
+                except Exception as inner_e:
+                    # 部分被重命名为 .xls 的现代 XML/XLSX 文件回退处理
+                    raw_df = pd.read_excel(path, header=None, dtype=str)
+            else:
+                # 默认读取 .xlsx 文件
+                raw_df = pd.read_excel(path, header=None, dtype=str)
+
+            if raw_df is None or raw_df.empty:
                 messagebox.showwarning("提示", "所选 Excel 文件中无数据！")
                 return
 
@@ -303,9 +332,13 @@ class WeChatAddApp:
                 on_confirm_callback=lambda cleaned_df: self._apply_cleaned_data(cleaned_df, path),
                 log_callback=self.log
             )
+        except ImportError:
+            msg = "读取旧版 .xls 文件需要安装 xlrd 支持库。\n\n请在终端中执行以下命令安装：\npip install xlrd"
+            self.log(f"❌ 缺少必要依赖库: xlrd")
+            messagebox.showerror("缺少依赖库", msg)
         except Exception as e:
             self.log(f"❌ 读取 Excel 文件异常: {e}")
-            messagebox.showerror("读取失败", f"无法解析该 Excel 文件：\n{e}")
+            messagebox.showerror("读取失败", f"无法解析该 Excel 文件：\n{e}\n\n如为旧版 .xls 文件，请确保已安装 xlrd 库。")
 
     def _apply_cleaned_data(self, cleaned_df: pd.DataFrame, path: str):
         df = cleaned_df.copy()

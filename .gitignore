@@ -57,3 +57,8 @@ ehthumbs.db
 
 # Logs
 *.log
+src/template_config.json
+src/success_phones.json
+src/safety_config.json
+weditor
+template_config.json
