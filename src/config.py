@@ -15,6 +15,10 @@ SUCCESS_PHONES_FILE = os.path.join(BASE_DIR, "success_phones.json")
 SAFETY_CONFIG_FILE = os.path.join(BASE_DIR, "safety_config.json")
 APP_USER_MODEL_ID = "company.wechat.automation.pro.4.0"
 
+# 核心固定表头与字段映射常量
+FIXED_HEADERS = ["手机号", "姓名", "小区", "楼栋", "单元", "房号"]
+FIXED_PHONE_COL = "手机号"
+
 DEFAULT_SAFETY_CONFIG = {
     "DAILY_MAX_LIMIT": 100,
     "MIN_COOLDOWN_SEC": 25,
@@ -62,15 +66,15 @@ GREETING_POOL = [
     "您好，同行交流，方便通过一下吗"
 ]
 
-# 默认表头与动态字段映射配置
+# 默认模板配置（固定表头模式）
 DEFAULT_TEMPLATE_CONFIG = {
-    "headers": ["手机号", "姓名", "小区", "楼栋", "单元", "房号"],
-    "phone_col": "手机号",
+    "headers": FIXED_HEADERS.copy(),
+    "phone_col": FIXED_PHONE_COL,
     "greeting_type": "manual",  # "manual" 手动/模板输入, "default" 系统随机语池
     "greeting_template": "你好，简单沟通一下！",
-    "greetings": GREETING_POOL.copy(),  # 语池列表
+    "greetings": GREETING_POOL.copy(),
     "remark_template": "${小区}${楼栋}${单元}${房号}-${姓名}(${手机号})",
-    "dedup_cols": ["手机号", "姓名", "小区", "楼栋", "单元", "房号"]
+    "dedup_cols": FIXED_HEADERS.copy()
 }
 
 def load_template_config() -> dict:
@@ -80,14 +84,18 @@ def load_template_config() -> dict:
             with open(TEMPLATE_CONFIG_FILE, "r", encoding="utf-8") as f:
                 saved = json.load(f)
                 cfg.update(saved)
-                # 兼容历史没有 greetings 字段的情况
                 if "greetings" not in cfg or not cfg["greetings"]:
                     cfg["greetings"] = GREETING_POOL.copy()
         except Exception:
             pass
+    # 强制锁定表头与手机号列不可被外部 json 破坏
+    cfg["headers"] = FIXED_HEADERS.copy()
+    cfg["phone_col"] = FIXED_PHONE_COL
     return cfg
 
 def save_template_config(cfg: dict):
+    cfg["headers"] = FIXED_HEADERS.copy()
+    cfg["phone_col"] = FIXED_PHONE_COL
     try:
         with open(TEMPLATE_CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(cfg, f, ensure_ascii=False, indent=2)
@@ -95,7 +103,6 @@ def save_template_config(cfg: dict):
         pass
 
 def get_greeting_pool() -> list:
-    """获取当前配置中生效的打招呼随机语池"""
     cfg = load_template_config()
     pool = cfg.get("greetings", [])
     return pool if pool else GREETING_POOL
