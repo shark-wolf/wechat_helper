@@ -39,7 +39,7 @@ class WeChatAddApp:
         self.df = None
         self.df_lock = threading.Lock()
         self.current_excel_path = None
-        self.row_buttons = {}  # {idx: (btn_add, btn_del)}
+        self.row_buttons = {}
         self.step_labels = {}
         self.daily_added_count = 0
         self.is_batch_running = False
@@ -48,16 +48,13 @@ class WeChatAddApp:
         self.selected_indices = set()
         self.all_selected = False
 
-        # 用于精确计算各列文本真实像素宽度的字体对象
         self.measure_font = tkfont.Font(family="Microsoft YaHei UI", size=9)
         self.header_font = tkfont.Font(family="Microsoft YaHei UI", size=9, weight="bold")
 
-        # 列宽自适应控制字典
         self.col_base_widths = {}
         self.col_cur_widths = {}
         self.last_table_w = 0
 
-        # 首列扩宽至 88px，确保 "[  ] 全选" 100% 完整展示
         self.col_w_chk = 88
         self.col_w_seq = 60
         self.col_w_op = 105
@@ -125,7 +122,6 @@ class WeChatAddApp:
         self.lbl_daily_counter = tk.Label(top_inner, text=f"本日已发: {self.daily_added_count}/{self.safety_cfg['DAILY_MAX_LIMIT']}", fg=THEME["text_main"], bg=THEME["card_bg"], font=("Microsoft YaHei UI", 9, "bold"))
         self.lbl_daily_counter.pack(side=tk.RIGHT, padx=5)
 
-        # 表格卡片
         self.table_card = tk.Frame(self.root, bg=THEME["card_bg"], highlightbackground=THEME["border"], highlightthickness=1)
         self.table_card.pack(fill=tk.BOTH, expand=True, padx=15, pady=8)
         self.table_inner = tk.Frame(self.table_card, bg=THEME["card_bg"], padx=10, pady=10)
@@ -133,7 +129,6 @@ class WeChatAddApp:
 
         self.build_treeview_structure()
 
-        # 执行状态卡片
         flow_card = tk.LabelFrame(self.root, text="  操作执行实时状态  ", font=("Microsoft YaHei UI", 9, "bold"), bg=THEME["card_bg"], fg=THEME["text_main"], highlightbackground=THEME["border"], highlightthickness=1, padx=15, pady=6)
         flow_card.pack(fill=tk.X, padx=15, pady=6)
 
@@ -145,7 +140,6 @@ class WeChatAddApp:
             status_lbl.pack(side=tk.RIGHT)
             self.step_labels[key] = status_lbl
 
-        # 控制台卡片
         log_card = tk.LabelFrame(self.root, text="  安全运行控制台日志 (双击行复制 / 右键菜单)  ", font=("Microsoft YaHei UI", 9, "bold"), bg=THEME["card_bg"], fg=THEME["text_main"], highlightbackground=THEME["border"], highlightthickness=1, padx=10, pady=6, height=240)
         log_card.pack_propagate(False)
         log_card.pack(fill=tk.X, padx=15, pady=(6, 15))
@@ -203,7 +197,6 @@ class WeChatAddApp:
         self.tree.bind("<MouseWheel>", lambda e: self.root.after(50, self.update_button_positions))
 
     def _calc_content_widths(self):
-        """精准测量每列真实文本的像素宽度，实现完全自适应不截断"""
         with self.df_lock:
             if self.df is None or self.df.empty:
                 return
@@ -236,7 +229,6 @@ class WeChatAddApp:
                 self.col_cur_widths[col] = calc_w
 
     def _on_table_configure(self, event=None):
-        """主界面大小缩放时自适应重算，确保充分铺满视口不留右侧断层"""
         if event is not None and hasattr(event, "width"):
             cur_w = event.width
         else:
@@ -351,7 +343,6 @@ class WeChatAddApp:
         self.tree.heading("勾选", text="[  ] 全选")
         self.refresh_treeview()
 
-        # 安全触发自适应重布局
         self.root.after(50, self._on_table_configure)
 
         dedup_msg = f"，依 [{'+'.join(valid_dedup_cols)}] 组合自动去重 {removed_count} 条，剩余有效数据 {after_count} 条。" if removed_count > 0 else "。"
@@ -500,7 +491,6 @@ class WeChatAddApp:
         self.root.after(100, self.update_button_positions)
 
     def update_button_positions(self):
-        """精准计算按钮摆放位置：➕ 与 🗑️ 之间添加清晰的 margin 间距（14px）"""
         with self.df_lock:
             if self.df is None or self.df.empty:
                 return
@@ -617,8 +607,12 @@ class WeChatAddApp:
                 self.log("🚨 命中风控熔断，紧急挂起全部任务！")
                 break
             if i < len(target_indices) - 1 and not self.cancel_requested:
-                c_min = self.safety_cfg.get("MIN_COOLDOWN_SEC", 25)
-                c_max = self.safety_cfg.get("MAX_COOLDOWN_SEC", 45)
+                try:
+                    c_min = int(self.safety_cfg.get("MIN_COOLDOWN_SEC", 25))
+                    c_max = int(self.safety_cfg.get("MAX_COOLDOWN_SEC", 45))
+                except (ValueError, TypeError):
+                    c_min, c_max = 25, 45
+
                 cooldown = random.randint(min(c_min, c_max), max(c_min, c_max))
                 for s in range(cooldown, 0, -1):
                     if self.cancel_requested:

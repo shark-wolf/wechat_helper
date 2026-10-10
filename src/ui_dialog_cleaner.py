@@ -116,7 +116,6 @@ class DataCleaningDialog(tk.Toplevel):
         screen_w = self.winfo_screenwidth()
         screen_h = self.winfo_screenheight()
 
-        # 动态占据屏幕合适比例，防止初始窗口宽度过小切断列
         dlg_w = min(1860, max(1280, int(screen_w * 0.94)))
         dlg_h = min(1100, max(750, int(screen_h * 0.88)))
 
@@ -138,7 +137,7 @@ class DataCleaningDialog(tk.Toplevel):
 
         self.col_w_chk = 65
         self.col_w_seq = 55
-        self.col_w_op = 90  # 扩宽操作列，彻底保障图标显示完整
+        self.col_w_op = 90
         self.head_height = 68
 
         self.base_data_widths = {}
@@ -159,7 +158,6 @@ class DataCleaningDialog(tk.Toplevel):
         style.map("Clean.Treeview", background=[("selected", "#E0F2FE")], foreground=[("selected", "#0369A1")])
 
     def _calc_base_widths(self):
-        """按每列文本最大长度采样计算内容基准自适应宽度"""
         for c_idx in range(len(self.raw_df.columns)):
             max_len = 0
             for val in self.raw_df[c_idx].dropna().head(40):
@@ -174,7 +172,6 @@ class DataCleaningDialog(tk.Toplevel):
             self.cur_col_widths[c_idx] = w
 
     def _smart_infer_column(self, col_idx: int) -> str:
-        """根据该列数据特征自动智能推断提取目标"""
         samples = []
         for val in self.raw_df[col_idx].dropna().head(10):
             s = str(val).strip()
@@ -207,7 +204,6 @@ class DataCleaningDialog(tk.Toplevel):
         return "(不提取)"
 
     def _create_widgets(self):
-        # 1. 顶部状态与快速清洗工具栏
         top_bar = tk.Frame(self, bg=THEME["card_bg"], highlightbackground=THEME["border"], highlightthickness=1, padx=15, pady=10)
         top_bar.pack(fill=tk.X, padx=12, pady=(10, 5))
 
@@ -219,7 +215,6 @@ class DataCleaningDialog(tk.Toplevel):
 
         tk.Label(top_bar, text="💡 提示: 双击单元格可修改；点击第1列勾选；点击操作列图标删除行", font=("Microsoft YaHei UI", 8), fg="#6B7280", bg=THEME["card_bg"]).pack(side=tk.LEFT, padx=15)
 
-        # 彻底去除幽灵占位符：采用纯字符 \U0001f5d1 无任何不可见变体符
         ModernButton(
             top_bar,
             text="\U0001f5d1 删除勾选项",
@@ -231,7 +226,6 @@ class DataCleaningDialog(tk.Toplevel):
             font=("Microsoft YaHei UI", 8, "bold")
         ).pack(side=tk.RIGHT, padx=5)
 
-        # 2. 一体化清洗表格
         table_card = tk.LabelFrame(
             self,
             text="  数据清洗列表（每列顶部下拉选择提取目标；双击编辑；支持横向平滑滚动与列宽自适应）  ",
@@ -290,7 +284,6 @@ class DataCleaningDialog(tk.Toplevel):
         self.tree.bind("<Configure>", lambda e: self._update_button_positions())
         self.tree.bind("<MouseWheel>", lambda e: self.after(50, self._update_button_positions))
 
-        # 3. 底部确认按钮栏
         bot_bar = tk.Frame(self, bg=THEME["card_bg"], padx=15, pady=12)
         bot_bar.pack(fill=tk.X, side="bottom")
 
@@ -391,14 +384,12 @@ class DataCleaningDialog(tk.Toplevel):
             self.inline_edit_entry = None
 
     def _build_header_controls(self):
-        """构建提取表头控件"""
         for child in self.head_frame.winfo_children():
             child.destroy()
         self.header_boxes.clear()
         self.header_labels.clear()
         self.header_combos.clear()
 
-        # 1. 勾选全选头
         chk_box = tk.Frame(self.head_frame, bg="#E5E7EB", width=self.col_w_chk, height=self.head_height, bd=0, highlightthickness=0)
         chk_box.pack_propagate(False)
         chk_box.pack(side=tk.LEFT, fill=tk.Y)
@@ -413,7 +404,6 @@ class DataCleaningDialog(tk.Toplevel):
         self.lbl_select_all.pack(expand=True)
         self.lbl_select_all.bind("<Button-1>", lambda e: self.toggle_select_all())
 
-        # 2. 序号列头
         seq_box = tk.Frame(self.head_frame, bg="#E5E7EB", width=self.col_w_seq, height=self.head_height, bd=0, highlightthickness=0)
         seq_box.pack_propagate(False)
         seq_box.pack(side=tk.LEFT, fill=tk.Y)
@@ -421,7 +411,6 @@ class DataCleaningDialog(tk.Toplevel):
 
         options = ["(不提取)"] + FIXED_HEADERS
 
-        # 3. 数据列头
         for c_idx in range(len(self.raw_df.columns)):
             col_w = self.cur_col_widths[c_idx]
             col_box = tk.Frame(self.head_frame, bg="#F9FAFB", width=col_w, height=self.head_height, bd=0, highlightthickness=0)
@@ -446,7 +435,6 @@ class DataCleaningDialog(tk.Toplevel):
 
             self._update_header_style(c_idx)
 
-        # 4. 操作列头
         op_box = tk.Frame(self.head_frame, bg="#E5E7EB", width=self.col_w_op, height=self.head_height, bd=0, highlightthickness=0)
         op_box.pack_propagate(False)
         op_box.pack(side=tk.LEFT, fill=tk.Y)
@@ -457,7 +445,6 @@ class DataCleaningDialog(tk.Toplevel):
         self.head_canvas.config(scrollregion=(0, 0, total_w, self.head_height))
 
     def _on_container_configure(self, event):
-        """窗口宽度变化时，动态拉伸自适应列宽并铺满表格"""
         avail_w = event.width - 24
         if avail_w <= 200 or abs(avail_w - self.last_container_width) < 6:
             return
@@ -535,7 +522,6 @@ class DataCleaningDialog(tk.Toplevel):
 
             self.tree.insert("", tk.END, iid=idx, values=vals)
 
-            # 行内删除按钮：保持标准纯正方形 🗑️ 图标按钮，尺寸适中，无字数溢出风险
             btn_del = ModernButton(
                 self.tree,
                 text="\U0001f5d1",
@@ -551,13 +537,11 @@ class DataCleaningDialog(tk.Toplevel):
         self.after(100, self._update_button_positions)
 
     def _update_button_positions(self):
-        """精准居中定位行内删除图标，避免视窗边缘截断"""
         for idx, btn in self.row_buttons.items():
             bbox = self.tree.bbox(idx, column="操作")
             if bbox and len(bbox) == 4:
                 x, y, w, h = bbox
                 btn_size = 24
-                # 若因横向滚动使得操作列暴露宽度不足，隐藏以防残缺
                 if w < btn_size + 4:
                     btn.place_forget()
                     continue
