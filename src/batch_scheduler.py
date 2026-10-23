@@ -69,7 +69,7 @@ class BatchScheduler:
             daily_limit = 100
 
         for i, idx in enumerate(target_indices):
-            # 恢复单日上限与手动中断的联合校验
+            # 校验单日上限与手动中断
             current_count = self.get_current_count()
             if self.cancel_requested or current_count >= daily_limit:
                 if current_count >= daily_limit:
@@ -86,7 +86,11 @@ class BatchScheduler:
                 self.log("🚨 命中风控熔断，紧急挂起全部任务！")
                 break
 
-            if i < len(target_indices) - 1 and not self.cancel_requested:
+            # 检查当前任务是否成功发送了添加申请
+            is_success_sent = "成功" in result
+
+            # 只有在成功发送添加信息后，才执行拟人冷却操作，否则直接跳过
+            if i < len(target_indices) - 1 and not self.cancel_requested and is_success_sent:
                 try:
                     c_min = int(safety_cfg.get("MIN_COOLDOWN_SEC", 25))
                     c_max = int(safety_cfg.get("MAX_COOLDOWN_SEC", 45))
