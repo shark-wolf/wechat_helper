@@ -73,7 +73,6 @@ DEFAULT_TEMPLATE_CONFIG = {
     "greeting_type": "manual",  # "manual" 手动/模板输入, "default" 系统随机语池
     "greeting_template": "你好，简单沟通一下！",
     "greetings": GREETING_POOL.copy(),
-    "remark_template": "${小区}${楼栋}${单元}${房号}-${姓名}(${手机号})",
     "dedup_cols": FIXED_HEADERS.copy()
 }
 
@@ -112,6 +111,7 @@ DEFAULT_COORDS = {
     "STEP3_HAS_CHANNELS": [284, 497],
     "STEP4_GREETING_INPUT": [190, 160],
     "STEP4_REMARK_INPUT": [190, 280],
+    "STEP4_TAG_INPUT": [190, 360],         # 新增：微信标签输入框默认坐标
     "STEP4_CONFIRM_BTN": [145, 705]
 }
 

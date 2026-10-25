@@ -17,13 +17,13 @@ if '%errorlevel%' NEQ '0' (
 
 :gotAdmin
     pushd "%CD%"
-    CD /D "%~dp0"
+    CD /D "%~dp0src"
 
 echo ===================================================
-echo   已获取管理员权限，正在启动 wechat_helper.py ...
+echo    已获取管理员权限，正在启动 src/main.py ...
 echo ===================================================
 echo.
 
-python wechat_helper.py
+python main.py
 
 pause

@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import pandas as pd
 from config import THEME, FIXED_HEADERS, FIXED_PHONE_COL
-from ui_components import ModernButton
+from ui_components import ModernButton, parse_placeholders
 
 def clean_phone_number(raw_val) -> str:
     """清洗手机号：提取所有纯数字，并仅保留前 11 位数字"""
@@ -31,7 +31,6 @@ def format_building_and_unit(field_name: str, raw_val: str) -> str:
     return s
 
 class MissingHeadersInputDialog(tk.Toplevel):
-    """为未在数据列中提取到的目标表头提供统一默认值的弹窗"""
     def __init__(self, parent, missing_headers: list, on_confirm_callback):
         super().__init__(parent)
         self.title("补全未提取列数据")
@@ -51,7 +50,6 @@ class MissingHeadersInputDialog(tk.Toplevel):
         self.missing_headers = missing_headers
         self.on_confirm_callback = on_confirm_callback
         self.entries = {}
-
         self._create_widgets()
 
     def _create_widgets(self):
@@ -99,7 +97,6 @@ class MissingHeadersInputDialog(tk.Toplevel):
 
 
 class DataCleaningDialog(tk.Toplevel):
-    """Excel 纯数据清洗与列映射提取窗口（全自适应宽度与规整排版）"""
     def __init__(self, parent, raw_df: pd.DataFrame, file_path: str, on_confirm_callback, log_callback=None):
         super().__init__(parent)
         self.app = parent
@@ -187,7 +184,6 @@ class DataCleaningDialog(tk.Toplevel):
                 return "手机号"
 
         combined_text = " ".join(samples).lower()
-
         if any(k in combined_text for k in ["手机", "电话", "号码", "tel", "phone"]):
             return "手机号"
         if any(k in combined_text for k in ["姓名", "客户", "业主", "联系人", "名字", "name"]):
@@ -213,8 +209,6 @@ class DataCleaningDialog(tk.Toplevel):
         self.lbl_stats = tk.Label(top_bar, text=f"有效记录: {len(self.raw_df)} 行 | 已选: 0 项", font=("Microsoft YaHei UI", 9, "bold"), fg="#059669", bg=THEME["card_bg"])
         self.lbl_stats.pack(side=tk.LEFT, padx=10)
 
-        tk.Label(top_bar, text="💡 提示: 双击单元格可修改；点击第1列勾选；点击操作列图标删除行", font=("Microsoft YaHei UI", 8), fg="#6B7280", bg=THEME["card_bg"]).pack(side=tk.LEFT, padx=15)
-
         ModernButton(
             top_bar,
             text="\U0001f5d1 删除勾选项",
@@ -228,7 +222,7 @@ class DataCleaningDialog(tk.Toplevel):
 
         table_card = tk.LabelFrame(
             self,
-            text="  数据清洗列表（每列顶部下拉选择提取目标；双击编辑；支持横向平滑滚动与列宽自适应）  ",
+            text="  数据清洗列表（每列顶部下拉选择提取目标；双击单元格直接编辑；支持横向滚动）  ",
             font=("Microsoft YaHei UI", 9, "bold"),
             bg=THEME["card_bg"],
             fg=THEME["text_main"],
@@ -284,21 +278,78 @@ class DataCleaningDialog(tk.Toplevel):
         self.tree.bind("<Configure>", lambda e: self._update_button_positions())
         self.tree.bind("<MouseWheel>", lambda e: self.after(50, self._update_button_positions))
 
-        bot_bar = tk.Frame(self, bg=THEME["card_bg"], padx=15, pady=12)
+        # ==================== 微信备注与标签配置面板 ====================
+        config_card = tk.LabelFrame(
+            self,
+            text="  微信备注与标签配置（支持自定义输入与字段占位组合）  ",
+            font=("Microsoft YaHei UI", 9, "bold"),
+            bg=THEME["card_bg"],
+            fg=THEME["text_main"],
+            highlightbackground=THEME["border"],
+            highlightthickness=1,
+            padx=12,
+            pady=8
+        )
+        config_card.pack(fill=tk.X, padx=12, pady=5)
+
+        row_rem = tk.Frame(config_card, bg=THEME["card_bg"])
+        row_rem.pack(fill=tk.X, pady=4)
+        tk.Label(row_rem, text="微信备注模板:", font=("Microsoft YaHei UI", 9, "bold"), bg=THEME["card_bg"], fg=THEME["text_main"]).pack(side=tk.LEFT)
+
+        self.ent_clean_remark = tk.Entry(row_rem, font=("Consolas", 10), relief=tk.SOLID, bd=1)
+        self.ent_clean_remark.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=8, ipady=3)
+        self.ent_clean_remark.insert(0, "${小区}${楼栋}${单元}${房号}-${姓名}(${手机号})")
+
+        tags_container = tk.Frame(row_rem, bg=THEME["card_bg"])
+        tags_container.pack(side=tk.LEFT, padx=5)
+        for col_name in FIXED_HEADERS:
+            tag_btn = tk.Label(tags_container, text=f"+${{{col_name}}}", font=("Consolas", 8), bg="#E0F2FE", fg="#0369A1", cursor="hand2", padx=4, pady=1, relief=tk.SOLID, bd=1)
+            tag_btn.pack(side=tk.LEFT, padx=2)
+            tag_btn.bind("<Button-1>", lambda e, t=f"${{{col_name}}}": self._insert_clean_remark_tag(t))
+
+        row_tag_prev = tk.Frame(config_card, bg=THEME["card_bg"])
+        row_tag_prev.pack(fill=tk.X, pady=4)
+
+        tk.Label(row_tag_prev, text="微信标签名称:", font=("Microsoft YaHei UI", 9, "bold"), bg=THEME["card_bg"], fg=THEME["text_main"]).pack(side=tk.LEFT)
+        self.ent_clean_tag = tk.Entry(row_tag_prev, font=("Microsoft YaHei UI", 9), relief=tk.SOLID, bd=1, width=20)
+        self.ent_clean_tag.pack(side=tk.LEFT, padx=8, ipady=3)
+        self.ent_clean_tag.insert(0, "房东")  # 默认值为房东
+
+        self.lbl_clean_preview = tk.Label(row_tag_prev, text="预览: -", font=("Microsoft YaHei UI", 8, "bold"), fg="#047857", bg="#ECFDF5", padx=8, pady=3, relief=tk.SOLID, bd=1)
+        self.lbl_clean_preview.pack(side=tk.RIGHT, padx=5)
+
+        def _update_clean_preview(*args):
+            mock_data = {"手机号": "15888888888", "姓名": "李二", "小区": "中海右岸", "楼栋": "1栋", "单元": "1单元", "房号": "801"}
+            tpl = self.ent_clean_remark.get().strip()
+            parsed = parse_placeholders(tpl, mock_data)
+            tag = self.ent_clean_tag.get().strip() or "房东"
+            self.lbl_clean_preview.config(text=f"预览 -> 备注: 【{parsed}】 | 标签: 【{tag}】")
+
+        self.ent_clean_remark.bind("<KeyRelease>", _update_clean_preview)
+        self.ent_clean_tag.bind("<KeyRelease>", _update_clean_preview)
+        _update_clean_preview()
+
+        # 底部按钮栏
+        bot_bar = tk.Frame(self, bg=THEME["card_bg"], padx=15, pady=10)
         bot_bar.pack(fill=tk.X, side="bottom")
 
         ModernButton(bot_bar, text="✔ 完成清洗并导入主页", command=self.on_import_clicked, bg=THEME["primary"], hover_bg=THEME["primary_hover"]).pack(side=tk.RIGHT, padx=5)
         ModernButton(bot_bar, text="取消", command=self.destroy, bg="#E5E7EB", hover_bg="#D1D5DB", fg="#374151").pack(side=tk.RIGHT, padx=5)
 
+    def _insert_clean_remark_tag(self, tag_str):
+        self.ent_clean_remark.insert(tk.INSERT, tag_str)
+        mock_data = {"手机号": "15888888888", "姓名": "李二", "小区": "中海右岸", "楼栋": "1栋", "单元": "1单元", "房号": "801"}
+        parsed = parse_placeholders(self.ent_clean_remark.get().strip(), mock_data)
+        tag = self.ent_clean_tag.get().strip() or "房东"
+        self.lbl_clean_preview.config(text=f"预览 -> 备注: 【{parsed}】 | 标签: 【{tag}】")
+
     def _on_tree_cell_click(self, event):
         region = self.tree.identify_region(event.x, event.y)
         if region != "cell" or self.tree.identify_column(event.x) != "#1":
             return
-
         row_id = self.tree.identify_row(event.y)
         if not row_id:
             return
-
         idx = int(row_id)
         if idx in self.selected_indices:
             self.selected_indices.remove(idx)
@@ -320,7 +371,6 @@ class DataCleaningDialog(tk.Toplevel):
             self.selected_indices.clear()
             self.all_selected = False
             self.lbl_select_all.config(text="[  ] 全选")
-
         self._refresh_table()
 
     def _update_stats_label(self):
@@ -329,11 +379,9 @@ class DataCleaningDialog(tk.Toplevel):
     def _on_double_click_cell(self, event):
         if self.inline_edit_entry:
             self._save_inline_edit()
-
         region = self.tree.identify_region(event.x, event.y)
         if region != "cell":
             return
-
         column_id = self.tree.identify_column(event.x)
         row_id = self.tree.identify_row(event.y)
         if not row_id or column_id in ["#1", "#2", f"#{len(self.tree_cols)}"]:
@@ -341,12 +389,10 @@ class DataCleaningDialog(tk.Toplevel):
 
         col_num = int(column_id.replace("#", "")) - 3
         row_idx = int(row_id)
-
         bbox = self.tree.bbox(row_id, column=column_id)
         if not bbox:
             return
         x, y, w, h = bbox
-
         current_val = str(self.raw_df.at[row_idx, col_num]) if row_idx in self.raw_df.index else ""
         if current_val in ["nan", "-"]:
             current_val = ""
@@ -356,7 +402,6 @@ class DataCleaningDialog(tk.Toplevel):
         entry.select_range(0, tk.END)
         entry.place(x=x, y=y, width=w, height=h)
         entry.focus_set()
-
         self.inline_edit_entry = entry
 
         def finish_edit(save=True):
@@ -432,7 +477,6 @@ class DataCleaningDialog(tk.Toplevel):
             cbo.pack(side=tk.TOP, fill=tk.X, padx=6, pady=(2, 6))
             cbo.bind("<<ComboboxSelected>>", lambda e, idx=c_idx: self._update_header_style(idx))
             self.header_combos[c_idx] = cbo
-
             self._update_header_style(c_idx)
 
         op_box = tk.Frame(self.head_frame, bg="#E5E7EB", width=self.col_w_op, height=self.head_height, bd=0, highlightthickness=0)
@@ -455,14 +499,12 @@ class DataCleaningDialog(tk.Toplevel):
             return
 
         base_total = self.col_w_chk + self.col_w_seq + sum(self.base_data_widths.values()) + self.col_w_op
-
         if avail_w > base_total:
             extra = avail_w - base_total
             add_per_col = extra // num_cols
             remainder = extra % num_cols
             for c_idx in range(num_cols):
-                extra_pixel = add_per_col + (1 if c_idx < remainder else 0)
-                self.cur_col_widths[c_idx] = self.base_data_widths[c_idx] + extra_pixel
+                self.cur_col_widths[c_idx] = self.base_data_widths[c_idx] + add_per_col + (1 if c_idx < remainder else 0)
         else:
             for c_idx in range(num_cols):
                 self.cur_col_widths[c_idx] = self.base_data_widths[c_idx]
@@ -484,7 +526,6 @@ class DataCleaningDialog(tk.Toplevel):
         lbl = self.header_labels.get(c_idx)
         if not (var and box and lbl):
             return
-
         val = var.get()
         if val != "(不提取)":
             box.config(bg="#E0F2FE")
@@ -569,14 +610,13 @@ class DataCleaningDialog(tk.Toplevel):
         target_indices = sorted(list(self.selected_indices.union(tree_sel)))
 
         if not target_indices:
-            messagebox.showinfo("提示", "请先通过第 1 列勾选或选中需要删除的数据行！")
+            messagebox.showinfo("提示", "请先勾选或选中需要删除的数据行！")
             return
 
         if messagebox.askyesno("确认删除", f"确定要删除已勾选/选中的 {len(target_indices)} 行数据吗？"):
             self.raw_df = self.raw_df.drop(index=target_indices).reset_index(drop=True)
             self.selected_indices.clear()
             self.all_selected = False
-            self.lbl_select_all.config(text="[  ] 全选")
             self._refresh_table()
 
     def on_import_clicked(self):
@@ -590,15 +630,11 @@ class DataCleaningDialog(tk.Toplevel):
             target = var.get()
             if target != "(不提取)":
                 if target in mapped_headers:
-                    messagebox.showerror(
-                        "冲突",
-                        f"目标项【{target}】被重复指定在【第 {mapped_headers[target] + 1} 列】和【第 {c_idx + 1} 列】！\n每个目标项只能由一列提取。"
-                    )
+                    messagebox.showerror("冲突", f"目标项【{target}】被重复指定！每个目标项只能由一列提取。")
                     return
                 mapped_headers[target] = c_idx
 
         missing_headers = [h for h in FIXED_HEADERS if h not in mapped_headers]
-
         if missing_headers:
             MissingHeadersInputDialog(
                 self,
@@ -610,9 +646,12 @@ class DataCleaningDialog(tk.Toplevel):
 
     def _generate_and_import(self, mapped_headers: dict, defaults: dict):
         clean_data = []
+        remark_tpl = self.ent_clean_remark.get().strip()
+        tag_val = self.ent_clean_tag.get().strip() or "房东"
 
         for _, row in self.raw_df.iterrows():
             item = {}
+            row_dict = {}
             for h in FIXED_HEADERS:
                 if h in mapped_headers:
                     c_idx = mapped_headers[h]
@@ -623,6 +662,7 @@ class DataCleaningDialog(tk.Toplevel):
                     elif h in ["楼栋", "单元"]:
                         val_str = format_building_and_unit(h, val_str)
                     item[h] = val_str
+                    row_dict[h] = val_str
                 else:
                     default_v = defaults.get(h, "")
                     if h == FIXED_PHONE_COL:
@@ -630,20 +670,24 @@ class DataCleaningDialog(tk.Toplevel):
                     elif h in ["楼栋", "单元"]:
                         default_v = format_building_and_unit(h, default_v)
                     item[h] = default_v
+                    row_dict[h] = default_v
+
+            # 自动生成微信备注与标签
+            item["微信备注"] = parse_placeholders(remark_tpl, row_dict)
+            item["微信标签"] = tag_val
             clean_data.append(item)
 
-        final_df = pd.DataFrame(clean_data, columns=FIXED_HEADERS)
-
+        final_df = pd.DataFrame(clean_data)
         before_count = len(final_df)
         final_df = final_df[final_df[FIXED_PHONE_COL].str.len() == 11].reset_index(drop=True)
         filtered_count = before_count - len(final_df)
 
         if final_df.empty:
-            messagebox.showerror("错误", "提取到的数据中未发现有效的 11 位手机号，无法导入！")
+            messagebox.showerror("错误", "提取的数据中未发现有效的 11 位手机号！")
             return
 
         if filtered_count > 0:
-            self.log(f"🧹 手机号清洗：自动剔除号码不合规（非11位纯数字）的脏数据 {filtered_count} 条。")
+            self.log(f"🧹 手机号清洗：自动剔除号码不合规的脏数据 {filtered_count} 条。")
 
         self.destroy()
         if self.on_confirm_callback:

@@ -10,8 +10,8 @@ class TemplateConfigDialog(tk.Toplevel):
         self.on_save_callback = on_save_callback
         self.log = log_callback or (lambda msg: None)
 
-        self.title("微信添加规则配置 (招呼语/备注/去重)")
-        dlg_w, dlg_h = 920, 750
+        self.title("微信添加规则配置 (招呼语/去重)")
+        dlg_w, dlg_h = 920, 620
         self.minsize(dlg_w, dlg_h)
         self.resizable(True, True)
         self.configure(bg=THEME["card_bg"])
@@ -39,11 +39,10 @@ class TemplateConfigDialog(tk.Toplevel):
         canvas.pack(side="top", fill="both", expand=True, padx=15, pady=(15, 5))
         scrollbar.pack(side="right", fill="y")
 
-        # ==================== 1. 招呼语与备注规则 ====================
-        sec1 = tk.LabelFrame(scrollable_frame, text=" 1. 申请打招呼语与微信备注规则 ", font=("Microsoft YaHei UI", 9, "bold"), bg=THEME["card_bg"], fg=THEME["text_main"], padx=12, pady=8)
+        # ==================== 1. 招呼语规则 ====================
+        sec1 = tk.LabelFrame(scrollable_frame, text=" 1. 申请打招呼语规则 ", font=("Microsoft YaHei UI", 9, "bold"), bg=THEME["card_bg"], fg=THEME["text_main"], padx=12, pady=8)
         sec1.pack(fill=tk.X, pady=6)
 
-        # ① 打招呼模式
         greet_sec = tk.Frame(sec1, bg=THEME["card_bg"])
         greet_sec.pack(fill=tk.X, pady=4)
         tk.Label(greet_sec, text="① 申请打招呼语发送模式:", font=("Microsoft YaHei UI", 9, "bold"), bg=THEME["card_bg"]).pack(anchor="w")
@@ -62,7 +61,6 @@ class TemplateConfigDialog(tk.Toplevel):
         rb_greet_def = tk.Radiobutton(greet_sec, text="模式 2: 从随机语池中随机抽取（下方可自定义编辑语料池，每行一条）：", variable=greet_mode_var, value="default", bg=THEME["card_bg"], font=("Microsoft YaHei UI", 9))
         rb_greet_def.pack(anchor="w", padx=10, pady=(6, 2))
 
-        # 随机语池编辑区
         pool_container = tk.Frame(greet_sec, bg="#F9FAFB", relief=tk.SOLID, bd=1, padx=8, pady=6)
         pool_container.pack(fill=tk.X, padx=28, pady=(2, 6))
 
@@ -93,7 +91,6 @@ class TemplateConfigDialog(tk.Toplevel):
 
         btn_reset_pool.bind("<Button-1>", reset_to_default_pool)
 
-        # 打招呼语预览
         prev_greet_box = tk.Frame(greet_sec, bg="#EFF6FF", relief=tk.SOLID, bd=1, padx=8, pady=5)
         prev_greet_box.pack(fill=tk.X, padx=10, pady=(4, 6))
         lbl_prev_greet = tk.Label(prev_greet_box, text="✨ 打招呼语拼接预览: -", font=("Microsoft YaHei UI", 8), fg="#1E40AF", bg="#EFF6FF", anchor="w")
@@ -111,39 +108,6 @@ class TemplateConfigDialog(tk.Toplevel):
 
         rb_greet_manual.config(command=on_greet_mode_toggle)
         rb_greet_def.config(command=on_greet_mode_toggle)
-
-        # ② 微信备注组合配置
-        remark_sec = tk.Frame(sec1, bg=THEME["card_bg"])
-        remark_sec.pack(fill=tk.X, pady=(10, 4))
-
-        rem_head_f = tk.Frame(remark_sec, bg=THEME["card_bg"])
-        rem_head_f.pack(fill=tk.X)
-        tk.Label(rem_head_f, text="② 微信备注组合配置:", font=("Microsoft YaHei UI", 9, "bold"), bg=THEME["card_bg"]).pack(side=tk.LEFT)
-        tk.Label(rem_head_f, text="（示例：${小区}${楼栋}${单元}${房号}-${姓名}(${手机号})）", font=("Microsoft YaHei UI", 8), fg="#6B7280", bg=THEME["card_bg"]).pack(side=tk.LEFT, padx=5)
-
-        ent_remark = tk.Entry(remark_sec, font=("Consolas", 10), relief=tk.SOLID, bd=1)
-        ent_remark.pack(fill=tk.X, pady=4, ipady=3)
-        ent_remark.insert(0, self.cfg.get("remark_template", "${小区}${楼栋}${单元}${房号}-${姓名}(${手机号})"))
-
-        tags_f = tk.Frame(remark_sec, bg=THEME["card_bg"])
-        tags_f.pack(fill=tk.X, pady=2)
-        tk.Label(tags_f, text="点击快捷插入固定列占位符:", font=("Microsoft YaHei UI", 8), fg="#4B5563", bg=THEME["card_bg"]).pack(side=tk.LEFT)
-        tags_container = tk.Frame(tags_f, bg=THEME["card_bg"])
-        tags_container.pack(side=tk.LEFT, padx=5)
-
-        def insert_tag(tag_str):
-            ent_remark.insert(tk.INSERT, tag_str)
-            update_previews()
-
-        for col_name in FIXED_HEADERS:
-            tag_btn = tk.Label(tags_container, text=f"+${{{col_name}}}", font=("Consolas", 8), bg="#E0F2FE", fg="#0369A1", cursor="hand2", padx=5, pady=1, relief=tk.SOLID, bd=1)
-            tag_btn.pack(side=tk.LEFT, padx=3)
-            tag_btn.bind("<Button-1>", lambda e, t=f"${{{col_name}}}": insert_tag(t))
-
-        prev_remark_box = tk.Frame(remark_sec, bg="#ECFDF5", relief=tk.SOLID, bd=1, padx=8, pady=5)
-        prev_remark_box.pack(fill=tk.X, pady=(6, 4))
-        lbl_prev_remark = tk.Label(prev_remark_box, text="✨ 微信备注组合拼接预览: -", font=("Microsoft YaHei UI", 8, "bold"), fg="#047857", bg="#ECFDF5", anchor="w")
-        lbl_prev_remark.pack(fill=tk.X)
 
         # ==================== 2. 去重规则设置 ====================
         sec2 = tk.LabelFrame(scrollable_frame, text=" 2. Excel 导入去重组合 ", font=("Microsoft YaHei UI", 9, "bold"), bg=THEME["card_bg"], fg=THEME["text_main"], padx=12, pady=8)
@@ -164,15 +128,7 @@ class TemplateConfigDialog(tk.Toplevel):
             cb.pack(side=tk.LEFT, padx=6, pady=2)
 
         def update_previews(*args):
-            mock_data = {
-                "手机号": "15888888888",
-                "姓名": "李二",
-                "小区": "中海右岸",
-                "楼栋": "1栋",
-                "单元": "1单元",
-                "房号": "801"
-            }
-
+            mock_data = {"手机号": "15888888888", "姓名": "李二", "小区": "中海右岸", "楼栋": "1栋", "单元": "1单元", "房号": "801"}
             if greet_mode_var.get() == "default":
                 pool_lines = [l.strip() for l in txt_pool.get("1.0", tk.END).split("\n") if l.strip()]
                 sample_item = pool_lines[0] if pool_lines else "你好！"
@@ -186,16 +142,8 @@ class TemplateConfigDialog(tk.Toplevel):
                 else:
                     lbl_prev_greet.config(text=f"✨ 打招呼语拼接预览: 【 {parsed_g} 】")
 
-            r_tpl = ent_remark.get().strip()
-            parsed_r = parse_placeholders(r_tpl, mock_data)
-            if not parsed_r:
-                lbl_prev_remark.config(text="✨ 微信备注组合拼接预览: (未设置组合或为空)")
-            else:
-                lbl_prev_remark.config(text=f"✨ 微信备注组合拼接预览: 【 {parsed_r} 】")
-
         ent_greeting.bind("<KeyRelease>", update_previews)
         txt_pool.bind("<KeyRelease>", update_previews)
-        ent_remark.bind("<KeyRelease>", update_previews)
 
         update_previews()
         on_greet_mode_toggle()
@@ -203,7 +151,6 @@ class TemplateConfigDialog(tk.Toplevel):
         def on_save():
             g_mode = greet_mode_var.get()
             g_tpl = ent_greeting.get().strip()
-            r_tpl = ent_remark.get().strip()
             d_cols = [c for c, v in dedup_vars.items() if v.get()]
             if not d_cols:
                 d_cols = [FIXED_PHONE_COL]
@@ -219,14 +166,13 @@ class TemplateConfigDialog(tk.Toplevel):
                 "greeting_type": g_mode,
                 "greeting_template": g_tpl,
                 "greetings": pool_lines,
-                "remark_template": r_tpl,
                 "dedup_cols": d_cols
             }
             save_template_config(new_cfg)
             if self.on_save_callback:
                 self.on_save_callback(new_cfg)
 
-            self.log(f"⚙️ 配置已保存: 招呼模式=[{g_mode}], 语池=[{len(pool_lines)}条], 备注模板=[{r_tpl}], 去重组合=[{'+'.join(d_cols)}]")
+            self.log(f"⚙️ 配置已保存: 招呼模式=[{g_mode}], 语池=[{len(pool_lines)}条], 去重组合=[{'+'.join(d_cols)}]")
             messagebox.showinfo("成功", "规则配置已生效并保存！")
             self.destroy()
 

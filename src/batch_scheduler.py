@@ -43,7 +43,6 @@ class BatchScheduler:
         phone = str(row_dict.get(FIXED_PHONE_COL, "")).strip()
         greeting_type = template_cfg.get("greeting_type", "manual")
         greeting_tpl = template_cfg.get("greeting_template", "")
-        remark_tpl = template_cfg.get("remark_template", "")
 
         if greeting_type == "manual":
             greeting = parse_placeholders(greeting_tpl, row_dict)
@@ -51,9 +50,12 @@ class BatchScheduler:
             pool = template_cfg.get("greetings", GREETING_POOL) or GREETING_POOL
             greeting = random.choice(pool)
 
-        remark = parse_placeholders(remark_tpl, row_dict)
+        # 获取清洗主页配置好的微信备注与微信标签（默认房东）
+        remark = str(row_dict.get("微信备注", "")).strip()
+        tag = str(row_dict.get("微信标签", "房东")).strip() or "房东"
 
-        result = self.bot.execute_add_pipeline(phone, remark_name=remark, custom_greeting=greeting)
+        # 调用底层机器人执行添加并自动填入备注与标签
+        result = self.bot.execute_add_pipeline(phone, remark_name=remark, custom_greeting=greeting, tag=tag)
         if "成功" in result:
             record_success_phone(phone)
             self.on_count_incremented(phone)
@@ -69,7 +71,7 @@ class BatchScheduler:
             daily_limit = 100
 
         for i, idx in enumerate(target_indices):
-            # 校验单日上限与手动中断
+            # 1. 检查单日上限与手动停止请求
             current_count = self.get_current_count()
             if self.cancel_requested or current_count >= daily_limit:
                 if current_count >= daily_limit:
@@ -82,14 +84,19 @@ class BatchScheduler:
             self.log(f"👉 [{i+1}/{len(target_indices)}] 准备添加: {phone}")
             result = self._execute_single_pipeline(idx, row_dict, template_cfg)
 
+            # 2. 单个任务刚一结束，立即检测停止指令（实现快速秒停）
+            if self.cancel_requested:
+                self.log("🛑 已收到停止指令，安全中断后续任务。")
+                break
+
             if any(k in result for k in ["频繁", "限制", "封禁"]):
                 self.log("🚨 命中风控熔断，紧急挂起全部任务！")
                 break
 
-            # 检查当前任务是否成功发送了添加申请
+            # 3. 判断是否成功发送申请
             is_success_sent = "成功" in result
 
-            # 只有在成功发送添加信息后，才执行拟人冷却操作，否则直接跳过
+            # 4. 只有在成功发送添加申请后，才执行拟人冷却操作；失败或跳过则直接处理下一个
             if i < len(target_indices) - 1 and not self.cancel_requested and is_success_sent:
                 try:
                     c_min = int(safety_cfg.get("MIN_COOLDOWN_SEC", 25))

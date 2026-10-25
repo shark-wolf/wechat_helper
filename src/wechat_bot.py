@@ -72,7 +72,8 @@ class WeChatBot:
         win32gui.EnumWindows(enum_cb, None)
         return target_hwnd
 
-    def execute_add_pipeline(self, phone: str, remark_name: str = "", custom_greeting: str = "") -> str:
+    def execute_add_pipeline(self, phone: str, remark_name: str = "", custom_greeting: str = "", tag: str = "房东") -> str:
+        """执行添加好友核心流水线（支持手机号, 备注, 招呼语, 标签）"""
         coords = load_coords()
         try:
             # ----------------------------------------------------
@@ -117,7 +118,6 @@ class WeChatBot:
             set_clipboard_text(phone)
             paste_text()
 
-            # 延长防抖等待，确保网络查找结果在慢速网络下充分加载
             time.sleep(max(1.0, SAFETY_CONFIG["SEARCH_DEBOUNCE"]))
             self.log("发送【向下键】选定网络查找项...")
             keyboard.send_keys('{DOWN}')
@@ -204,10 +204,11 @@ class WeChatBot:
             self.set_step("CHECK_CARD", "✓ 已点击添加", "#07C160")
 
             # ----------------------------------------------------
-            # 步骤 4: 右侧『申请添加朋友』弹窗（打招呼与备注写入）
+            # 步骤 4: 右侧『申请添加朋友』弹窗（打招呼、备注与标签写入）
             # ----------------------------------------------------
             self.set_step("SEND_VERIFY", "填写验证中...", "#D97706")
             self.log("等待右侧『申请添加朋友』弹窗...")
+            self.log(f"当前任务配置 -> 备注: 【{remark_name}】 | 标签: 【{tag}】")
 
             verify_win = None
             for _ in range(8):
@@ -241,7 +242,6 @@ class WeChatBot:
                 greeting = custom_greeting.strip() if custom_greeting and custom_greeting != "-" else random.choice(GREETING_POOL)
                 self.log(f"填写验证招呼语: {greeting}")
 
-                # 点击招呼语输入框以确立初始焦点
                 post_click(verify_win.handle, coords["STEP4_GREETING_INPUT"][0], coords["STEP4_GREETING_INPUT"][1])
                 time.sleep(0.2)
                 keyboard.send_keys('^a{BACKSPACE}')
@@ -262,7 +262,40 @@ class WeChatBot:
                     self.log(f"✅ 备注已成功粘贴: {final_remark}")
                     human_delay(0.4, 0.6)
 
-                # 3. 提交确定按钮
+                # 3. 填充微信标签（按用户经验：Tab ➔ 回车 ➔ 贴入标签 ➔ 向下键 ➔ 回车 ➔ 鼠标点击空白处）
+                final_tag = tag.strip() if tag and tag != "-" else "房东"
+                if final_tag:
+                    self.log(f"准备设置微信标签: {final_tag}")
+
+                    # 从备注后使用一次 tab
+                    keyboard.send_keys('{TAB}')
+                    time.sleep(0.2)
+
+                    # 再点击回车唤醒标签输入
+                    keyboard.send_keys('{ENTER}')
+                    time.sleep(0.3)
+
+                    # 清空并贴入标签
+                    keyboard.send_keys('^a{BACKSPACE}')
+                    time.sleep(0.15)
+                    set_clipboard_text(final_tag)
+                    paste_text()
+                    time.sleep(0.3)
+
+                    # 按键盘向下键定位到下拉列表第一项
+                    keyboard.send_keys('{DOWN}')
+                    time.sleep(0.2)
+
+                    # 再回车选中确认
+                    keyboard.send_keys('{ENTER}')
+                    time.sleep(0.3)
+
+                    # 最后鼠标点击空白处（弹窗顶部安全区域 190, 80）使标签完全渲染呈现
+                    post_click(verify_win.handle, 190, 80)
+                    self.log(f"✅ 标签已通过「Tab ➔ 回车 ➔ 粘贴 ➔ 向下键 ➔ 回车 ➔ 点击空白处」完美生效: {final_tag}")
+                    human_delay(0.4, 0.6)
+
+                # 4. 提交确定按钮
                 btn_x, btn_y = coords["STEP4_CONFIRM_BTN"]
                 self.log(f"后台点击确定按钮 -> 相对坐标 ({btn_x}, {btn_y})")
                 post_click(verify_win.handle, btn_x, btn_y)
@@ -270,7 +303,7 @@ class WeChatBot:
             time.sleep(0.3)
             keyboard.send_keys('{ENTER}')
 
-            # 4. 关闭残留面板
+            # 5. 关闭残留面板
             time.sleep(0.8)
             keyboard.send_keys('{ESC}')
 
